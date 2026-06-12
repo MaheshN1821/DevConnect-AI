@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-
 import Navbar from "../../components/Navbar";
 import ProtectedRoute from "../../components/ProtectedRoute";
 import CodeEditorModal from "../../components/CodeEditorModal";
