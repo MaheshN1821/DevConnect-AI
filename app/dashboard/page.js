@@ -551,6 +551,7 @@ export default function Dashboard() {
   const { user } = useAuth();
   const { isMobile, isTablet } = useResponsive();
   const [searchQuery, setSearchQuery] = useState("");
+  const [postType, setPostType] = useState("discussion");
   const [content, setContent] = useState("");
   const [posts, setPosts] = useState([]);
   const [error, setError] = useState("");
@@ -687,24 +688,26 @@ export default function Dashboard() {
   // Desktop uses the existing sidebar nav — this is mobile-only.
   const [activeFilter, setActiveFilter] = useState("all");
 
-  const filteredPosts = useMemo(() => {
-    switch (activeFilter) {
-      case "mine":
-        return posts.filter((p) => p.uid === user?.uid);
-      case "trending":
-        return [...posts].sort((a, b) => (b.likes || 0) - (a.likes || 0));
-      case "recent": {
-        const since = Date.now() - 24 * 60 * 60 * 1000; // last 24 h
-        const recent = posts.filter((p) => {
-          const ts = p.timestamp?.toDate ? p.timestamp.toDate().getTime() : 0;
-          return ts >= since;
-        });
-        return recent.length > 0 ? recent : posts.slice(0, 10);
-      }
-      default:
-        return posts; // "all"
+const filteredPosts = useMemo(() => {
+  switch (activeFilter) {
+    case "mine":
+      return posts.filter((p) => p.uid === user?.uid);
+    case "trending":
+      return [...posts].sort((a, b) => (b.likes || 0) - (a.likes || 0));
+    case "questions":
+      return posts.filter((p) => p.postType === "question");
+    case "recent": {
+      const since = Date.now() - 24 * 60 * 60 * 1000;
+      const recent = posts.filter((p) => {
+        const ts = p.timestamp?.toDate ? p.timestamp.toDate().getTime() : 0;
+        return ts >= since;
+      });
+      return recent.length > 0 ? recent : posts.slice(0, 10);
     }
-  }, [posts, activeFilter, user?.uid]);
+    default:
+      return posts;
+  }
+}, [posts, activeFilter, user?.uid]);
 
   const searchedPosts = useMemo(() => {
   const q = searchQuery.trim().toLowerCase();
@@ -741,11 +744,13 @@ export default function Dashboard() {
         photoURL: user.photoURL || "",
         content: content.trim(),
         tags: selectedTags,
+        postType: postType,
         timestamp: serverTimestamp(),
         likes: 0,
         likedBy: [],
         comments: [],
       });
+      setPostType("discussion");
       setContent("");
       setSelectedTags([]);
     } catch (err) {
@@ -928,12 +933,12 @@ export default function Dashboard() {
 
   // Mobile bottom nav items
   const mobileNavItems = [
-    { icon: "▦", label: "Feed", active: true },
-    { icon: "📈", label: "Trending" },
-    { icon: "❔", label: "Q&A" },
-    { icon: "👥", label: "Collab" },
-    { icon: "🔖", label: "Saved" },
-  ];
+  { icon: "▦", label: "Feed",     filterKey: "all"       },
+  { icon: "📈", label: "Trending", filterKey: "trending"  },
+  { icon: "❔", label: "Q&A",      filterKey: "questions" },
+  { icon: "👥", label: "Collab",   filterKey: "all"       },
+  { icon: "🔖", label: "Saved",    filterKey: "saved"     },
+];
 
   // ── Shared widget JSX — uses live trendingTags & activeMembers from Firebase ──
   const RightWidgets = ({ inline }) => (
@@ -1044,18 +1049,26 @@ export default function Dashboard() {
               <aside style={S.leftSidebar}>
                 <ul style={S.sidebarNavList}>
                   {[
-                    { icon: "▦", label: "Feed", active: true },
-                    { icon: "📈", label: "Trending" },
-                    { icon: "❔", label: "Questions" },
-                    { icon: "👥", label: "Collaborations" },
-                  ].map(({ icon, label, active }) => (
-                    <li key={label}>
-                      <button style={active ? S.sidebarNavItemLinkActive : S.sidebarNavItemLink}>
-                        <span>{icon}</span>
-                        <span>{label}</span>
-                      </button>
-                    </li>
-                  ))}
+  { icon: "▦", label: "Feed",           filterKey: "all"       },
+  { icon: "📈", label: "Trending",       filterKey: "trending"  },
+  { icon: "❔", label: "Questions",      filterKey: "questions" },
+  { icon: "👥", label: "Collaborations", filterKey: "all"       },
+].map(({ icon, label, filterKey }) => (
+  <li key={label}>
+    <button
+      onClick={() => setActiveFilter(filterKey)}
+      style={activeFilter === filterKey && filterKey !== "all"
+        ? S.sidebarNavItemLinkActive
+        : label === "Feed" && activeFilter === "all"
+        ? S.sidebarNavItemLinkActive
+        : S.sidebarNavItemLink
+      }
+    >
+      <span>{icon}</span>
+      <span>{label}</span>
+    </button>
+  </li>
+))}
                   <li>
                     <button
                       id="saved-posts-nav"
@@ -1109,6 +1122,37 @@ export default function Dashboard() {
                     />
                   </div>
                 </div>
+
+                {/* Post type selector */}
+<div style={{ display: "flex", gap: 8 }}>
+  {["discussion", "question"].map((type) => (
+    <button
+      key={type}
+      type="button"
+      onClick={() => setPostType(type)}
+      style={{
+        padding: "4px 14px",
+        borderRadius: "var(--radius-full)",
+        border: postType === type
+          ? "1px solid var(--accent-primary)"
+          : "1px solid var(--border-color)",
+        backgroundColor: postType === type
+          ? "var(--accent-primary-alpha)"
+          : "transparent",
+        color: postType === type
+          ? "var(--accent-primary)"
+          : "var(--text-muted)",
+        fontWeight: postType === type ? 700 : 500,
+        fontSize: "0.8rem",
+        cursor: "pointer",
+        fontFamily: "inherit",
+        textTransform: "capitalize",
+      }}
+    >
+      {type === "question" ? "❔ Question" : "💬 Discussion"}
+    </button>
+  ))}
+</div>
 
                 <div id="composer-tags" style={S.composerTagsInput}>
                   {availableTags.map((tag) => (
@@ -1257,6 +1301,7 @@ export default function Dashboard() {
                   { key: "all",      label: "All Posts", icon: "▦"  },
                   { key: "mine",     label: "My Posts",  icon: "👤" },
                   { key: "trending", label: "Trending",  icon: "🔥" },
+                  { key: "questions", label: "Questions",  icon: "❔" },
                   { key: "recent",   label: "Recent",    icon: "🕐" },
                 ].map(({ key, label, icon }) => {
                   const isActive = activeFilter === key;
@@ -1371,7 +1416,16 @@ export default function Dashboard() {
                             </div>
                           </div>
                           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                            <span style={S.categoryTag}>Discussion</span>
+                            <span style={{
+  ...S.categoryTag,
+  ...(post.postType === "question" && {
+    backgroundColor: "rgba(251,191,36,0.1)",
+    border: "1px solid rgba(251,191,36,0.4)",
+    color: "#fbbf24",
+  }),
+}}>
+  {post.postType === "question" ? "❔ Question" : "💬 Discussion"}
+</span>
                             <span style={S.postTimestamp}>
                               {post.timestamp?.toDate
                                 ? post.timestamp.toDate().toLocaleString()
@@ -1638,26 +1692,33 @@ export default function Dashboard() {
 
         {/* ── Mobile Bottom Navigation Bar ────────────────────────────── */}
         <nav className="mobile-bottom-nav" style={{ justifyContent: "space-evenly", alignItems: "center" }}>
-          {mobileNavItems.map(({ icon, label, active }) => (
-            <button
-              key={label}
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 3,
-                flex: 1,
-                background: "transparent",
-                border: "none",
-                cursor: "pointer",
-                padding: "6px 0",
-                color: active ? "var(--accent-primary)" : "var(--text-muted)",
-                fontSize: "0.65rem",
-                fontWeight: active ? 700 : 500,
-                fontFamily: "inherit",
-              }}
-            >
+          {mobileNavItems.map(({ icon, label, filterKey }) => (
+  <button
+    key={label}
+    onClick={() => {
+      if (filterKey === "saved") {
+        setShowSavedPosts(true);
+      } else {
+        setActiveFilter(filterKey);
+      }
+    }}
+    style={{
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 3,
+      flex: 1,
+      background: "transparent",
+      border: "none",
+      cursor: "pointer",
+      padding: "6px 0",
+      color: activeFilter === filterKey ? "var(--accent-primary)" : "var(--text-muted)",
+      fontSize: "0.65rem",
+      fontWeight: activeFilter === filterKey ? 700 : 500,
+      fontFamily: "inherit",
+    }}
+  >
               <span style={{ fontSize: "1.3rem", lineHeight: 1 }}>{icon}</span>
               <span>{label}</span>
             </button>
