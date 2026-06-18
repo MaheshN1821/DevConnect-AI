@@ -9,6 +9,21 @@ import { db } from "../../lib/firebase";
 import { collection, query, where, onSnapshot, setDoc, doc } from "firebase/firestore";
 import { updateProfile } from "firebase/auth";
 
+// Simple hook to know when we're on a small screen.
+// Inline styles can't use @media, so layout-critical values branch on this.
+function useIsMobile(breakpoint = 640) {
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth <= breakpoint);
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, [breakpoint]);
+
+  return isMobile;
+}
+
 const S = {
   navbar: {
     position: "fixed",
@@ -26,6 +41,9 @@ const S = {
     backdropFilter: "blur(16px)",
     WebkitBackdropFilter: "blur(16px)",
   },
+  navbarMobile: {
+    padding: "0 12px",
+  },
   navBrand: {
     fontSize: "1.2rem",
     fontWeight: 700,
@@ -34,11 +52,19 @@ const S = {
     display: "flex",
     alignItems: "center",
     gap: 8,
+    whiteSpace: "nowrap",
+    overflow: "hidden",
+  },
+  navBrandMobile: {
+    fontSize: "1rem",
   },
   navActions: {
     display: "flex",
     alignItems: "center",
     gap: 16,
+  },
+  navActionsMobile: {
+    gap: 8,
   },
   btnNavBack: {
     padding: "8px 16px",
@@ -50,6 +76,11 @@ const S = {
     cursor: "pointer",
     textDecoration: "none",
     transition: "all var(--transition-fast)",
+    whiteSpace: "nowrap",
+  },
+  btnNavBackMobile: {
+    padding: "6px 10px",
+    fontSize: "0.8rem",
   },
   btnLogout: {
     padding: "8px 16px",
@@ -60,6 +91,11 @@ const S = {
     fontWeight: 600,
     cursor: "pointer",
     transition: "all var(--transition-fast)",
+    whiteSpace: "nowrap",
+  },
+  btnLogoutMobile: {
+    padding: "6px 10px",
+    fontSize: "0.8rem",
   },
   main: {
     minHeight: "100vh",
@@ -71,6 +107,10 @@ const S = {
     margin: "40px auto",
     padding: "0 24px",
   },
+  containerMobile: {
+    margin: "20px auto",
+    padding: "0 12px",
+  },
   cardSmall: {
     backgroundColor: "var(--bg-secondary)",
     border: "1px solid var(--border-color)",
@@ -78,6 +118,11 @@ const S = {
     padding: 24,
     marginTop: 20,
     boxShadow: "var(--shadow-sm)",
+  },
+  cardSmallMobile: {
+    padding: 16,
+    marginTop: 16,
+    borderRadius: "var(--radius-md)",
   },
   profileCardInner: {
     display: "flex",
@@ -90,6 +135,10 @@ const S = {
     width: 90,
     height: 90,
     cursor: "pointer",
+  },
+  avatarWrapMobile: {
+    width: 76,
+    height: 76,
   },
   avatarLarge: {
     width: 90,
@@ -104,6 +153,11 @@ const S = {
     color: "#000",
     border: "3px solid var(--border-color)",
     overflow: "hidden",
+  },
+  avatarLargeMobile: {
+    width: 76,
+    height: 76,
+    fontSize: "1.7rem",
   },
   avatarOverlay: {
     position: "absolute",
@@ -205,6 +259,7 @@ export default function Profile() {
   const { user, logout, loading } = useAuth();
   const { isDarkMode, toggleTheme } = useTheme();
   const router = useRouter();
+  const isMobile = useIsMobile();
 
   const [postCount, setPostCount] = useState(0);
   const [editingName, setEditingName] = useState(false);
@@ -341,50 +396,61 @@ export default function Profile() {
   return (
     <main style={S.main}>
       {/* Navbar */}
-      <header style={S.navbar}>
-        <Link href="/dashboard" style={S.navBrand}>
-          <span>🧠 DevConnect AI</span>
+      <header style={{ ...S.navbar, ...(isMobile ? S.navbarMobile : {}) }}>
+        <Link href="/dashboard" style={{ ...S.navBrand, ...(isMobile ? S.navBrandMobile : {}) }}>
+          <span>{isMobile ? "🧠 DevConnect" : "🧠 DevConnect AI"}</span>
         </Link>
-        <div style={S.navActions}>
+        <div style={{ ...S.navActions, ...(isMobile ? S.navActionsMobile : {}) }}>
           <button
             onClick={toggleTheme}
             style={{
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              width: 36,
-              height: 36,
+              width: isMobile ? 32 : 36,
+              height: isMobile ? 32 : 36,
+              flexShrink: 0,
               background: "transparent",
               border: "1px solid var(--border-color)",
               borderRadius: "var(--radius-full)",
               color: "var(--text-secondary)",
               cursor: "pointer",
-              fontSize: "1.2rem",
+              fontSize: isMobile ? "1rem" : "1.2rem",
             }}
             title="Toggle theme"
           >
             {isDarkMode ? "☀️" : "🌙"}
           </button>
-          <Link href="/dashboard" style={S.btnNavBack}>← Dashboard</Link>
-          <button onClick={handleLogout} style={S.btnLogout}>🚪 Logout</button>
+          <Link
+            href="/dashboard"
+            style={{ ...S.btnNavBack, ...(isMobile ? S.btnNavBackMobile : {}) }}
+          >
+            {isMobile ? "←" : "← Dashboard"}
+          </Link>
+          <button
+            onClick={handleLogout}
+            style={{ ...S.btnLogout, ...(isMobile ? S.btnLogoutMobile : {}) }}
+          >
+            {isMobile ? "🚪" : "🚪 Logout"}
+          </button>
         </div>
       </header>
 
-      <div style={S.container}>
+      <div style={{ ...S.container, ...(isMobile ? S.containerMobile : {}) }}>
 
         {/* ── Profile Card ───────────────────────────────────────────── */}
-        <div style={S.cardSmall}>
+        <div style={{ ...S.cardSmall, ...(isMobile ? S.cardSmallMobile : {}) }}>
           <div style={S.profileCardInner}>
 
             {/* Avatar — click anywhere on it to change photo */}
             <div
-              style={S.avatarWrap}
+              style={{ ...S.avatarWrap, ...(isMobile ? S.avatarWrapMobile : {}) }}
               onMouseEnter={() => setAvatarHovered(true)}
               onMouseLeave={() => setAvatarHovered(false)}
               onClick={() => !photoUploading && fileInputRef.current?.click()}
               title="Click to change photo"
             >
-              <div style={S.avatarLarge}>
+              <div style={{ ...S.avatarLarge, ...(isMobile ? S.avatarLargeMobile : {}) }}>
                 {currentPhotoURL ? (
                   <img
                     src={currentPhotoURL}
@@ -423,10 +489,10 @@ export default function Profile() {
             )}
 
             <div style={{ textAlign: "center" }}>
-              <h1 style={{ color: "var(--text-primary)", margin: "0 0 4px 0", fontSize: "1.4rem" }}>
+              <h1 style={{ color: "var(--text-primary)", margin: "0 0 4px 0", fontSize: isMobile ? "1.2rem" : "1.4rem" }}>
                 {user.displayName || "Anonymous User"}
               </h1>
-              <p style={{ color: "var(--text-muted)", margin: 0, fontSize: "0.9rem" }}>
+              <p style={{ color: "var(--text-muted)", margin: 0, fontSize: "0.9rem", wordBreak: "break-word" }}>
                 {user.email}
               </p>
             </div>
@@ -434,14 +500,21 @@ export default function Profile() {
         </div>
 
         {/* ── Stats Cards ────────────────────────────────────────────── */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginTop: 20 }}>
-          <div style={{ ...S.cardSmall, textAlign: "center", marginTop: 0 }}>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
+            gap: isMobile ? 12 : 20,
+            marginTop: isMobile ? 16 : 20,
+          }}
+        >
+          <div style={{ ...S.cardSmall, ...(isMobile ? S.cardSmallMobile : {}), textAlign: "center", marginTop: 0 }}>
             <div style={{ color: "var(--text-muted)", fontSize: "0.85rem", marginBottom: 8 }}>Posts</div>
             <div style={{ color: "var(--accent-primary)", fontSize: "2rem", fontWeight: 700 }}>
               {postCount}
             </div>
           </div>
-          <div style={{ ...S.cardSmall, textAlign: "center", marginTop: 0 }}>
+          <div style={{ ...S.cardSmall, ...(isMobile ? S.cardSmallMobile : {}), textAlign: "center", marginTop: 0 }}>
             <div style={{ color: "var(--text-muted)", fontSize: "0.85rem", marginBottom: 8 }}>Joined</div>
             <div style={{ color: "var(--text-primary)", fontSize: "0.95rem", fontWeight: 600 }}>
               {joinedDate}
@@ -450,7 +523,7 @@ export default function Profile() {
         </div>
 
         {/* ── Account Info ───────────────────────────────────────────── */}
-        <div style={{ ...S.cardSmall, textAlign: "left" }}>
+        <div style={{ ...S.cardSmall, ...(isMobile ? S.cardSmallMobile : {}), textAlign: "left" }}>
           <h2 style={{ color: "var(--text-primary)", fontSize: "1.1rem", margin: "0 0 16px 0" }}>
             Account Information
           </h2>
@@ -460,7 +533,7 @@ export default function Profile() {
             {/* Email */}
             <div>
               <div style={S.infoLabel}>Email Address</div>
-              <div style={S.infoValue}>{user.email}</div>
+              <div style={{ ...S.infoValue, wordBreak: "break-word" }}>{user.email}</div>
             </div>
 
             <div style={S.divider} />
@@ -498,8 +571,17 @@ export default function Profile() {
                   )}
                 </div>
               ) : (
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 4 }}>
-                  <div style={S.infoValue}>{user.displayName || "Not set"}</div>
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: isMobile ? "column" : "row",
+                    alignItems: isMobile ? "flex-start" : "center",
+                    justifyContent: "space-between",
+                    gap: isMobile ? 8 : 0,
+                    marginTop: 4,
+                  }}
+                >
+                  <div style={{ ...S.infoValue, wordBreak: "break-word" }}>{user.displayName || "Not set"}</div>
                   <button style={S.btnGhost} onClick={startEditName}>✏️ Edit</button>
                 </div>
               )}

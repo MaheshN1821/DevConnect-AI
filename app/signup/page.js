@@ -7,10 +7,26 @@ import { useTheme } from "../../context/ThemeContext";
 import Link from "next/link";
 import { Sparkles, Mail, KeyRound, User, Sun, Moon } from "lucide-react";
 
+// Inline styles can't use @media queries, so layout-critical values
+// branch on this instead.
+function useIsMobile(breakpoint = 480) {
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth <= breakpoint);
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, [breakpoint]);
+
+  return isMobile;
+}
+
 export default function Signup() {
   const { signupWithEmail, loginWithGoogle, loginWithGithub, user } = useAuth();
   const { isDarkMode, toggleTheme } = useTheme();
   const router = useRouter();
+  const isMobile = useIsMobile();
 
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
@@ -71,7 +87,8 @@ export default function Signup() {
     position: "relative",
     overflow: "hidden",
     background: "var(--bg-primary)",
-    padding: "12px 16px",
+    padding: isMobile ? "12px 12px" : "12px 16px",
+    boxSizing: "border-box",
   };
 
   const glowStyle = {
@@ -84,20 +101,21 @@ export default function Signup() {
   const cardStyle = {
     maxWidth: "28rem",
     width: "100%",
-    padding: "2.5rem",
+    padding: isMobile ? "1.75rem 1.25rem" : "2.5rem",
     background: "var(--bg-secondary)",
     backdropFilter: "blur(12px)",
-    borderRadius: "1.5rem",
+    borderRadius: isMobile ? "1.25rem" : "1.5rem",
     boxShadow: "0 20px 25px rgba(0, 0, 0, 0.2)",
     border: "1px solid var(--border-color)",
     position: "relative",
     zIndex: 10,
+    boxSizing: "border-box",
   };
 
   const themeToggleContainerStyle = {
     position: "absolute",
-    top: "1.25rem",
-    right: "1.25rem",
+    top: isMobile ? "0.85rem" : "1.25rem",
+    right: isMobile ? "0.85rem" : "1.25rem",
     zIndex: 20,
   };
 
@@ -125,8 +143,8 @@ export default function Signup() {
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    width: "3.5rem",
-    height: "3.5rem",
+    width: isMobile ? "3rem" : "3.5rem",
+    height: isMobile ? "3rem" : "3.5rem",
     borderRadius: "0.625rem",
     background: "linear-gradient(to bottom right, #a855f7, #ec4899)",
     boxShadow: "0 0 20px rgba(168, 85, 247, 0.3)",
@@ -136,7 +154,7 @@ export default function Signup() {
   const titleStyle = {
     marginTop: "0.5rem",
     textAlign: "center",
-    fontSize: "1.875rem",
+    fontSize: isMobile ? "1.5rem" : "1.875rem",
     fontWeight: 800,
     color: "var(--text-primary)",
     letterSpacing: "-0.025em",
@@ -147,6 +165,8 @@ export default function Signup() {
     textAlign: "center",
     fontSize: "0.875rem",
     color: "var(--text-muted)",
+    paddingLeft: isMobile ? "0.5rem" : 0,
+    paddingRight: isMobile ? "0.5rem" : 0,
   };
 
   const errorStyle = {
@@ -163,7 +183,7 @@ export default function Signup() {
   };
 
   const formStyle = {
-    marginTop: "2rem",
+    marginTop: isMobile ? "1.5rem" : "2rem",
     display: "flex",
     flexDirection: "column",
     gap: "1.25rem",
@@ -229,7 +249,7 @@ export default function Signup() {
 
   const dividerStyle = {
     position: "relative",
-    marginTop: "2rem",
+    marginTop: isMobile ? "1.5rem" : "2rem",
   };
 
   const dividerLineStyle = {
@@ -251,13 +271,14 @@ export default function Signup() {
     textTransform: "uppercase",
     letterSpacing: "0.05em",
     fontWeight: 600,
+    textAlign: "center",
   };
 
   const gridStyle = {
-    marginTop: "1.5rem",
+    marginTop: isMobile ? "1.25rem" : "1.5rem",
     display: "grid",
-    gridTemplateColumns: "1fr 1fr",
-    gap: "1rem",
+    gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
+    gap: isMobile ? "0.75rem" : "1rem",
   };
 
   const socialButtonStyle = {
@@ -279,6 +300,7 @@ export default function Signup() {
     color: "var(--text-primary)",
     cursor: "pointer",
     transition: "all var(--transition-fast)",
+    boxSizing: "border-box",
   };
 
   const footerStyle = {
@@ -346,7 +368,7 @@ export default function Signup() {
         {/* Brand Header */}
         <div style={brandHeaderStyle}>
           <div style={brandIconStyle}>
-            <span style={{ fontSize: "1.5rem" }}>🧠</span>
+            <span style={{ fontSize: isMobile ? "1.3rem" : "1.5rem" }}>🧠</span>
           </div>
           <h2 style={titleStyle}>Create an account</h2>
           <p style={subtitleStyle}>
