@@ -45,6 +45,24 @@ function getPreset(key) {
   return LINK_PRESETS.find((p) => p.key === key) || { icon: "🔗", label: key, placeholder: "https://..." };
 }
 
+// ── Preset tech stack / skill badges ──────────────────────────────────────────
+const SKILL_PRESETS = [
+  { key: "frontend",   label: "Frontend Developer",  color: "#3b82f6" },
+  { key: "backend",    label: "Backend Developer",   color: "#8b5cf6" },
+  { key: "fullstack",  label: "Full Stack Developer", color: "#10b981" },
+  { key: "mobile",     label: "Mobile Developer",    color: "#f97316" },
+  { key: "devops",     label: "DevOps Engineer",     color: "#ef4444" },
+  { key: "ai_ml",      label: "AI / ML Engineer",    color: "#06b6d4" },
+  { key: "design",     label: "UI/UX Designer",      color: "#ec4899" },
+  { key: "data",       label: "Data Scientist",      color: "#eab308" },
+  { key: "blockchain", label: "Blockchain Dev",      color: "#6366f1" },
+];
+const MAX_SKILLS = 8;
+
+function getSkillMeta(key) {
+  return SKILL_PRESETS.find((s) => s.key === key) || { key, label: key, color: "#64748b" };
+}
+
 // ── Styles ────────────────────────────────────────────────────────────────────
 const S = {
   navbar: {
@@ -351,6 +369,168 @@ function LinksDisplay({ links }) {
   );
 }
 
+// ── Tech stack / skills picker (edit mode) ────────────────────────────────────
+// skillsInput: string[]  — preset keys (e.g. "frontend") and/or freeform custom labels
+function SkillsPicker({ skillsInput, setSkillsInput }) {
+  const [customText, setCustomText] = useState("");
+  const atLimit = skillsInput.length >= MAX_SKILLS;
+
+  const togglePreset = (key) => {
+    setSkillsInput((prev) => {
+      if (prev.includes(key)) return prev.filter((s) => s !== key);
+      if (prev.length >= MAX_SKILLS) return prev;
+      return [...prev, key];
+    });
+  };
+
+  const addCustom = () => {
+    const text = customText.trim();
+    if (!text) return;
+    setCustomText("");
+    if (skillsInput.some((s) => s.toLowerCase() === text.toLowerCase())) return;
+    if (skillsInput.length >= MAX_SKILLS) return;
+    setSkillsInput((prev) => [...prev, text]);
+  };
+
+  const removeSkill = (key) => setSkillsInput((prev) => prev.filter((s) => s !== key));
+
+  const customSkills = skillsInput.filter((s) => !SKILL_PRESETS.find((p) => p.key === s));
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+        {SKILL_PRESETS.map((opt) => {
+          const active = skillsInput.includes(opt.key);
+          return (
+            <button
+              key={opt.key}
+              type="button"
+              onClick={() => togglePreset(opt.key)}
+              disabled={!active && atLimit}
+              style={{
+                padding: "5px 12px", borderRadius: "var(--radius-full)",
+                border: `1px solid ${active ? opt.color : "var(--border-color)"}`,
+                background: active ? `${opt.color}22` : "transparent",
+                color: active ? opt.color : "var(--text-secondary)",
+                fontSize: "0.78rem", fontWeight: 600, fontFamily: "inherit",
+                cursor: (!active && atLimit) ? "not-allowed" : "pointer",
+                opacity: (!active && atLimit) ? 0.5 : 1,
+                transition: "all 0.15s",
+              }}
+            >
+              {active ? "✓ " : ""}{opt.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {customSkills.length > 0 && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+          {customSkills.map((s) => (
+            <span key={s} style={{
+              display: "inline-flex", alignItems: "center", gap: 6,
+              padding: "5px 10px", borderRadius: "var(--radius-full)",
+              border: "1px solid #64748b88", background: "#64748b22",
+              color: "#94a3b8", fontSize: "0.78rem", fontWeight: 600,
+            }}>
+              {s}
+              <button
+                onClick={() => removeSkill(s)}
+                style={{ background: "none", border: "none", cursor: "pointer", color: "inherit", fontSize: "0.75rem", padding: 0, lineHeight: 1 }}
+                title="Remove"
+              >✕</button>
+            </span>
+          ))}
+        </div>
+      )}
+
+      <div style={{ display: "flex", gap: 6 }}>
+        <input
+          style={{ ...S.input, fontSize: "0.82rem", padding: "6px 10px" }}
+          value={customText}
+          onChange={(e) => setCustomText(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addCustom(); } }}
+          placeholder="Other (e.g. Game Dev, QA)…"
+          maxLength={24}
+          disabled={atLimit}
+        />
+        <button onClick={addCustom} type="button" disabled={atLimit} style={{ ...S.btnGhost, fontSize: "0.78rem", padding: "6px 14px", whiteSpace: "nowrap", opacity: atLimit ? 0.5 : 1, cursor: atLimit ? "not-allowed" : "pointer" }}>
+          + Add
+        </button>
+      </div>
+      <span style={{ fontSize: "0.7rem", color: "var(--text-muted)" }}>{skillsInput.length}/{MAX_SKILLS} selected</span>
+    </div>
+  );
+}
+
+// ── Skill badges (view mode) ──────────────────────────────────────────────────
+function SkillBadges({ skills }) {
+  if (!skills || skills.length === 0) return null;
+  return (
+    <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+      {skills.map((key) => {
+        const meta = getSkillMeta(key);
+        return (
+          <span key={key} style={{
+            padding: "3px 11px", borderRadius: "var(--radius-full)",
+            border: `1px solid ${meta.color}55`, background: `${meta.color}1a`,
+            color: meta.color, fontSize: "0.74rem", fontWeight: 600,
+          }}>
+            {meta.label}
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── Open-to-collaborate toggle (edit mode) ────────────────────────────────────
+function CollabToggle({ value, onChange, disabled = false, label = "Open to Collaboration" }) {
+  return (
+    <div
+      onClick={() => { if (!disabled) onChange(!value); }}
+      role="switch"
+      aria-checked={value}
+      aria-disabled={disabled}
+      style={{
+        display: "inline-flex", alignItems: "center", gap: 10,
+        cursor: disabled ? "default" : "pointer", userSelect: "none",
+        opacity: disabled ? 0.6 : 1, transition: "opacity 0.15s",
+      }}
+    >
+      <div style={{
+        width: 40, height: 22, borderRadius: "var(--radius-full)",
+        background: value ? "#22c55e" : "var(--border-color)",
+        position: "relative", transition: "background 0.2s", flexShrink: 0,
+      }}>
+        <div style={{
+          position: "absolute", top: 2, left: value ? 20 : 2,
+          width: 18, height: 18, borderRadius: "50%", background: "#fff",
+          transition: "left 0.2s", boxShadow: "0 1px 3px rgba(0,0,0,0.3)",
+        }} />
+      </div>
+      <span style={{ fontSize: "0.85rem", color: "var(--text-primary)", fontWeight: 500 }}>
+        {label}
+      </span>
+    </div>
+  );
+}
+
+// ── Open-to-collaborate badge (view mode) ─────────────────────────────────────
+function CollabBadge() {
+  return (
+    <span style={{
+      display: "inline-flex", alignItems: "center", gap: 6,
+      padding: "3px 11px", borderRadius: "var(--radius-full)",
+      background: "rgba(34,197,94,0.12)", border: "1px solid rgba(34,197,94,0.4)",
+      color: "#22c55e", fontSize: "0.74rem", fontWeight: 600,
+    }}>
+      <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#22c55e", flexShrink: 0 }} />
+      Open to Collaborate
+    </span>
+  );
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 // Convert flat links object (from Firestore) → array for editor
 function linksObjToArr(obj) {
@@ -369,7 +549,11 @@ function linksArrToObj(arr) {
 }
 
 // ── EditForm (top-level so React never remounts inputs on parent re-render) ───
-function EditForm({ nameInput, setNameInput, bioInput, setBioInput, linksInput, setLinksInput, editSaving, editMsg, onSave, onCancel }) {
+function EditForm({
+  nameInput, setNameInput, bioInput, setBioInput, linksInput, setLinksInput,
+  skillsInput, setSkillsInput, collabInput, setCollabInput,
+  editSaving, editMsg, onSave, onCancel,
+}) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       <div>
@@ -397,6 +581,14 @@ function EditForm({ nameInput, setNameInput, bioInput, setBioInput, linksInput, 
           placeholder="Tell the community about yourself..."
           maxLength={200}
         />
+      </div>
+      <div>
+        <div style={{ ...S.infoLabel, marginBottom: 8 }}>Tech Stack / Skills</div>
+        <SkillsPicker skillsInput={skillsInput} setSkillsInput={setSkillsInput} />
+      </div>
+      <div>
+        <div style={{ ...S.infoLabel, marginBottom: 8 }}>Collaboration</div>
+        <CollabToggle value={collabInput} onChange={setCollabInput} />
       </div>
       <div>
         <div style={{ ...S.infoLabel, marginBottom: 8 }}>Social Links</div>
@@ -482,12 +674,16 @@ export default function Profile() {
   const [nameInput, setNameInput] = useState("");
   const [bioInput, setBioInput] = useState("");
   const [linksInput, setLinksInput] = useState([]); // [{ key, url, label? }]
+  const [skillsInput, setSkillsInput] = useState([]); // string[]
+  const [collabInput, setCollabInput] = useState(false);
   const [editSaving, setEditSaving] = useState(false);
   const [editMsg, setEditMsg] = useState(null);
 
   // saved values
   const [bio, setBio] = useState("");
   const [links, setLinks] = useState({});
+  const [skills, setSkills] = useState([]);
+  const [openToCollaborate, setOpenToCollaborate] = useState(false);
 
   const [followers, setFollowers] = useState([]);
   const [following, setFollowing] = useState([]);
@@ -511,6 +707,8 @@ export default function Profile() {
       // pick up custom_ keys
       Object.keys(data).forEach((k) => { if (k.startsWith("custom_") && !k.endsWith("_label")) linkObj[k] = data[k]; });
       setLinks(linkObj);
+      setSkills(Array.isArray(data.skills) ? data.skills : []);
+      setOpenToCollaborate(!!data.openToCollaborate);
       setFollowers(data.followers || []);
       setFollowing(data.following || []);
     });
@@ -543,6 +741,8 @@ export default function Profile() {
     setNameInput(user.displayName || "");
     setBioInput(bio);
     setLinksInput(linksObjToArr(links));
+    setSkillsInput(skills);
+    setCollabInput(openToCollaborate);
     setEditing(true);
     setEditMsg(null);
   };
@@ -563,6 +763,8 @@ export default function Profile() {
       await setDoc(doc(db, "users", user.uid), {
         displayName: nameInput.trim(),
         bio: bioInput.trim(),
+        skills: skillsInput.slice(0, MAX_SKILLS),
+        openToCollaborate: collabInput,
         ...cleanedLinks,
         ...newLinks,
       }, { merge: true });
@@ -649,6 +851,8 @@ export default function Profile() {
                       nameInput={nameInput} setNameInput={setNameInput}
                       bioInput={bioInput} setBioInput={setBioInput}
                       linksInput={linksInput} setLinksInput={setLinksInput}
+                      skillsInput={skillsInput} setSkillsInput={setSkillsInput}
+                      collabInput={collabInput} setCollabInput={setCollabInput}
                       editSaving={editSaving} editMsg={editMsg}
                       onSave={handleSaveProfile}
                       onCancel={() => { setEditing(false); setEditMsg(null); }}
@@ -663,6 +867,14 @@ export default function Profile() {
                       <p style={{ color: "var(--text-muted)", margin: 0, fontSize: "0.88rem", wordBreak: "break-word" }}>{user.email}</p>
                     </div>
                     {bio && <p style={{ color: "var(--text-secondary)", fontSize: "0.85rem", textAlign: "center", margin: 0, maxWidth: 300 }}>{bio}</p>}
+                    {openToCollaborate && (
+                      <div style={{ display: "flex", justifyContent: "center" }}><CollabBadge /></div>
+                    )}
+                    {skills.length > 0 && (
+                      <div style={{ display: "flex", justifyContent: "center" }}>
+                        <SkillBadges skills={skills} />
+                      </div>
+                    )}
                     {Object.keys(links).length > 0 && (
                       <div style={{ display: "flex", gap: 12, flexWrap: "wrap", justifyContent: "center" }}>
                         {Object.entries(links).filter(([, url]) => url).map(([key, url]) => {
@@ -731,18 +943,28 @@ export default function Profile() {
                       nameInput={nameInput} setNameInput={setNameInput}
                       bioInput={bioInput} setBioInput={setBioInput}
                       linksInput={linksInput} setLinksInput={setLinksInput}
+                      skillsInput={skillsInput} setSkillsInput={setSkillsInput}
+                      collabInput={collabInput} setCollabInput={setCollabInput}
                       editSaving={editSaving} editMsg={editMsg}
                       onSave={handleSaveProfile}
                       onCancel={() => { setEditing(false); setEditMsg(null); }}
                     />
                   ) : (
                     <>
-                      <h1 style={{ color: "var(--text-primary)", margin: "0 0 4px 0", fontSize: "1.5rem", fontWeight: 700 }}>
-                        {user.displayName || "Anonymous User"}
-                      </h1>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                        <h1 style={{ color: "var(--text-primary)", margin: "0 0 4px 0", fontSize: "1.5rem", fontWeight: 700 }}>
+                          {user.displayName || "Anonymous User"}
+                        </h1>
+                        {openToCollaborate && <CollabBadge />}
+                      </div>
                       <p style={{ color: "var(--text-muted)", margin: "0 0 8px 0", fontSize: "0.9rem" }}>{user.email}</p>
                       {bio && (
                         <p style={{ color: "var(--text-secondary)", fontSize: "0.9rem", margin: "0 0 12px 0", lineHeight: 1.6, maxWidth: 560 }}>{bio}</p>
+                      )}
+                      {skills.length > 0 && (
+                        <div style={{ marginBottom: 12 }}>
+                          <SkillBadges skills={skills} />
+                        </div>
                       )}
                       {Object.keys(links).filter(k => links[k]).length > 0 && (
                         <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
@@ -811,6 +1033,22 @@ export default function Profile() {
                     <div style={S.infoLabel}>Bio</div>
                     <div style={{ ...S.infoValue, color: bio ? "var(--text-primary)" : "var(--text-muted)", fontStyle: bio ? "normal" : "italic", fontSize: "0.88rem", lineHeight: 1.55 }}>
                       {bio || "No bio yet."}
+                    </div>
+                  </div>
+                  <div style={S.divider} />
+                  <div>
+                    <div style={{ ...S.infoLabel, marginBottom: 8 }}>Tech Stack / Skills</div>
+                    {skills.length > 0
+                      ? <SkillBadges skills={skills} />
+                      : <span style={{ color: "var(--text-muted)", fontStyle: "italic", fontSize: "0.85rem" }}>No skills added yet.</span>}
+                  </div>
+                  <div style={S.divider} />
+                  <div>
+                    <div style={S.infoLabel}>Collaboration</div>
+                    <div style={{ marginTop: 4 }}>
+                      {openToCollaborate
+                        ? <CollabBadge />
+                        : <span style={{ color: "var(--text-muted)", fontStyle: "italic", fontSize: "0.85rem" }}>Not open to collaboration.</span>}
                     </div>
                   </div>
                   <div style={S.divider} />

@@ -34,6 +34,22 @@ const LINK_PRESETS = [
 ];
 const getPreset = (key) => LINK_PRESETS.find((p) => p.key === key) || { icon: "🔗", label: key };
 
+// ── Preset tech stack / skill badges (mirrors /profile) ───────────────────────
+const SKILL_PRESETS = [
+  { key: "frontend",   label: "Frontend Developer",  color: "#3b82f6" },
+  { key: "backend",    label: "Backend Developer",   color: "#8b5cf6" },
+  { key: "fullstack",  label: "Full Stack Developer", color: "#10b981" },
+  { key: "mobile",     label: "Mobile Developer",    color: "#f97316" },
+  { key: "devops",     label: "DevOps Engineer",     color: "#ef4444" },
+  { key: "ai_ml",      label: "AI / ML Engineer",    color: "#06b6d4" },
+  { key: "design",     label: "UI/UX Designer",      color: "#ec4899" },
+  { key: "data",       label: "Data Scientist",      color: "#eab308" },
+  { key: "blockchain", label: "Blockchain Dev",      color: "#6366f1" },
+];
+function getSkillMeta(key) {
+  return SKILL_PRESETS.find((s) => s.key === key) || { key, label: key, color: "#64748b" };
+}
+
 // ── Styles ────────────────────────────────────────────────────────────────────
 const S = {
   page: { minHeight: "100vh", background: "var(--bg-primary)" },
@@ -230,6 +246,42 @@ function Avatar({ photoURL, displayName, size = 80 }) {
   );
 }
 
+// ── Skill badges ──────────────────────────────────────────────────────────────
+function SkillBadges({ skills, justify = "flex-start" }) {
+  if (!skills || skills.length === 0) return null;
+  return (
+    <div style={{ display: "flex", flexWrap: "wrap", gap: 8, justifyContent: justify }}>
+      {skills.map((key) => {
+        const meta = getSkillMeta(key);
+        return (
+          <span key={key} style={{
+            padding: "3px 11px", borderRadius: "var(--radius-full)",
+            border: `1px solid ${meta.color}55`, background: `${meta.color}1a`,
+            color: meta.color, fontSize: "0.74rem", fontWeight: 600,
+          }}>
+            {meta.label}
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── Open-to-collaborate badge ─────────────────────────────────────────────────
+function CollabBadge() {
+  return (
+    <span style={{
+      display: "inline-flex", alignItems: "center", gap: 6,
+      padding: "3px 11px", borderRadius: "var(--radius-full)",
+      background: "rgba(34,197,94,0.12)", border: "1px solid rgba(34,197,94,0.4)",
+      color: "#22c55e", fontSize: "0.74rem", fontWeight: 600,
+    }}>
+      <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#22c55e", flexShrink: 0 }} />
+      Open to Collaborate
+    </span>
+  );
+}
+
 // ── Post card ─────────────────────────────────────────────────────────────────
 function PostCard({ post, isMobile }) {
   const [expanded, setExpanded] = useState(false);
@@ -371,6 +423,8 @@ export default function UserProfilePage() {
   const isFollowing = following.includes(uid);
   const followers = profileUser?.followers || [];
   const followingList = profileUser?.following || [];
+  const skills = Array.isArray(profileUser?.skills) ? profileUser.skills : [];
+  const openToCollaborate = !!profileUser?.openToCollaborate;
   const joinedDate = profileUser?.createdAt?.toDate
     ? profileUser.createdAt.toDate().toLocaleDateString("en-US", { month: "long", year: "numeric" })
     : "Recently";
@@ -446,6 +500,7 @@ export default function UserProfilePage() {
                   {profileUser?.displayName || "Anonymous User"}
                 </h1>
                 <span style={S.badge}>Community Member</span>
+                {openToCollaborate && <CollabBadge />}
               </div>
 
               {profileUser?.email && (
@@ -456,6 +511,13 @@ export default function UserProfilePage() {
                 <p style={{ ...S.heroBio, ...(isMobile ? S.heroBioMobile : {}) }}>
                   {profileUser.bio}
                 </p>
+              )}
+
+              {/* Tech stack / skill badges */}
+              {skills.length > 0 && (
+                <div style={{ marginBottom: 14 }}>
+                  <SkillBadges skills={skills} justify={isMobile ? "center" : "flex-start"} />
+                </div>
               )}
 
               {/* Social links */}
