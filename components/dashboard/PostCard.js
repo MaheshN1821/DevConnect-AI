@@ -2,7 +2,11 @@
 
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { useState, useEffect } from "react";
 import UserAvatar from "./UserAvatar";
+
+const DEFAULT_EMOJIS = ["👍", "✅", "💡", "❤️"];
+const EXTRA_EMOJIS   = ["🔥", "😂", "😮", "🎉", "🙌", "💯", "🚀", "😢", "😡", "👀", "🤔", "⭐"];
 
 const S = {
   discussionCard: {
@@ -38,20 +42,20 @@ const S = {
     alignItems: "center",
     padding: "2px 8px",
     backgroundColor:
-      type === "question" ? "rgba(251,146,60,0.12)"
+      type === "question"      ? "rgba(251,146,60,0.12)"
       : type === "collaboration" ? "rgba(52,211,153,0.12)"
-      : type === "poll" ? "rgba(99,102,241,0.12)"
+      : type === "poll"          ? "rgba(99,102,241,0.12)"
       : "var(--bg-primary)",
     border: `1px solid ${
-      type === "question" ? "rgba(251,146,60,0.4)"
+      type === "question"      ? "rgba(251,146,60,0.4)"
       : type === "collaboration" ? "rgba(52,211,153,0.4)"
-      : type === "poll" ? "rgba(99,102,241,0.4)"
+      : type === "poll"          ? "rgba(99,102,241,0.4)"
       : "var(--border-color)"
     }`,
     color:
-      type === "question" ? "#fb923c"
+      type === "question"      ? "#fb923c"
       : type === "collaboration" ? "#34d399"
-      : type === "poll" ? "#818cf8"
+      : type === "poll"          ? "#818cf8"
       : "var(--text-secondary)",
     borderRadius: "var(--radius-sm)",
     fontSize: "0.7rem",
@@ -221,7 +225,7 @@ const S = {
     cursor: "pointer",
     fontFamily: "inherit",
   },
-  // Poll styles
+  // ── Poll styles ───────────────────────────────────────────────────────────
   pollContainer: {
     display: "flex",
     flexDirection: "column",
@@ -270,12 +274,89 @@ const S = {
     color: "var(--text-muted)",
     marginTop: 2,
   },
+  // ── Reaction styles ───────────────────────────────────────────────────────
+  reactionBtn: (hasReacted) => ({
+    display: "flex",
+    alignItems: "center",
+    gap: 3,
+    padding: "2px 8px",
+    borderRadius: 999,
+    border: hasReacted ? "1px solid var(--accent-primary)" : "1px solid var(--border-color)",
+    background: hasReacted ? "rgba(99,102,241,0.12)" : "transparent",
+    color: hasReacted ? "var(--accent-primary)" : "var(--text-muted)",
+    fontSize: "0.78rem",
+    fontWeight: hasReacted ? 600 : 400,
+    cursor: "pointer",
+    fontFamily: "inherit",
+    transition: "all 0.15s ease",
+    lineHeight: 1.4,
+  }),
+  pickerToggleBtn: (isOpen) => ({
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "2px 8px",
+    height: 22,
+    borderRadius: 999,
+    border: "1px solid var(--border-color)",
+    background: isOpen ? "var(--accent-primary-alpha)" : "transparent",
+    color: isOpen ? "var(--accent-primary)" : "var(--text-muted)",
+    fontSize: "0.72rem",
+    fontWeight: 600,
+    cursor: "pointer",
+    fontFamily: "inherit",
+    transition: "all 0.15s",
+    whiteSpace: "nowrap",
+    gap: 3,
+  }),
+  pickerGrid: {
+    position: "absolute",
+    bottom: "calc(100% + 8px)",
+    left: 0,
+    zIndex: 50,
+    display: "grid",
+    gridTemplateColumns: "repeat(6, 1fr)",
+    gap: 4,
+    padding: 10,
+    backgroundColor: "var(--bg-secondary)",
+    border: "1px solid var(--border-color)",
+    borderRadius: "var(--radius-md)",
+    boxShadow: "0 4px 24px rgba(0,0,0,0.4)",
+    minWidth: 210,
+  },
+  pickerEmojiBtn: (hasReacted) => ({
+    position: "relative",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: 32,
+    height: 32,
+    borderRadius: "var(--radius-sm)",
+    border: "none",
+    background: hasReacted ? "var(--accent-primary-alpha)" : "transparent",
+    fontSize: "1.1rem",
+    cursor: "pointer",
+    transition: "background 0.12s",
+  }),
+  pickerBadge: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    fontSize: "0.52rem",
+    fontWeight: 700,
+    color: "var(--accent-primary)",
+    backgroundColor: "var(--bg-secondary)",
+    borderRadius: 999,
+    padding: "0 2px",
+    lineHeight: 1.4,
+    pointerEvents: "none",
+  },
 };
 
 // ── Poll block ────────────────────────────────────────────────────────────────
 function PollBlock({ post, user, onVotePoll }) {
-  const options = post.pollOptions || [];
-  const votes = post.pollVotes || {};
+  const options    = post.pollOptions || [];
+  const votes      = post.pollVotes  || {};
   const totalVotes = Object.values(votes).reduce((s, arr) => s + (arr?.length || 0), 0);
 
   const userVotedIdx = options.findIndex((_, idx) =>
@@ -285,15 +366,15 @@ function PollBlock({ post, user, onVotePoll }) {
 
   return (
     <div style={S.pollContainer}>
-      {/* Poll question text */}
+      {/* Poll question */}
       {post.content && (
         <p style={S.pollQuestion}>{post.content}</p>
       )}
 
-      {/* Poll options */}
+      {/* Options */}
       {options.map((opt, idx) => {
-        const count = (votes[idx] || []).length;
-        const pct = totalVotes > 0 ? Math.round((count / totalVotes) * 100) : 0;
+        const count    = (votes[idx] || []).length;
+        const pct      = totalVotes > 0 ? Math.round((count / totalVotes) * 100) : 0;
         const isMyVote = userVotedIdx === idx;
 
         return (
@@ -326,6 +407,7 @@ function PollBlock({ post, user, onVotePoll }) {
   );
 }
 
+// ── PostCard ──────────────────────────────────────────────────────────────────
 export default function PostCard({
   post,
   postIndex,
@@ -358,14 +440,24 @@ export default function PostCard({
   onSaveCommentEdit,
   onDeleteComment,
   onVotePoll,
+  onToggleCommentReaction,
 }) {
+  const [openPickerFor, setOpenPickerFor] = useState(null);
+
+  useEffect(() => {
+    if (!openPickerFor) return;
+    const close = () => setOpenPickerFor(null);
+    window.addEventListener("click", close);
+    return () => window.removeEventListener("click", close);
+  }, [openPickerFor]);
+
   const postPhoto = getLivePhoto(post.uid, post.photoURL);
-  const postName = getLiveName(post.uid, post.displayName);
-  const type = post.postType || "discussion";
+  const postName  = getLiveName(post.uid, post.displayName);
+  const type      = post.postType || "discussion";
   const typeLabel =
-    type === "question" ? "Question"
+    type === "question"      ? "Question"
     : type === "collaboration" ? "Collaborate"
-    : type === "poll" ? "Poll"
+    : type === "poll"          ? "Poll"
     : "Discussion";
 
   return (
@@ -373,7 +465,7 @@ export default function PostCard({
       id={`post-${post.id}`}
       style={{ ...S.discussionCard, ...(isHighlighted ? S.discussionCardHighlighted : {}) }}
     >
-      {/* Card Header */}
+      {/* ── Card Header ── */}
       <div style={S.cardHeader}>
         <div style={S.authorInfo}>
           <UserAvatar
@@ -404,7 +496,7 @@ export default function PostCard({
         </div>
       </div>
 
-      {/* Post Body / Poll / Edit Mode */}
+      {/* ── Post Body / Poll / Edit Mode ── */}
       {editingId === post.id ? (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           <textarea
@@ -418,7 +510,6 @@ export default function PostCard({
           </div>
         </div>
       ) : type === "poll" ? (
-        // Poll renders its own question + options inside PollBlock
         <PollBlock post={post} user={user} onVotePoll={onVotePoll} />
       ) : (
         <div style={S.postBody}>
@@ -445,14 +536,14 @@ export default function PostCard({
         </div>
       )}
 
-      {/* Tags */}
+      {/* ── Tags ── */}
       <div style={S.postTags}>
         {post.tags && post.tags.length > 0
           ? post.tags.map((tag) => <a href="#" style={S.postTag} key={tag}>{tag}</a>)
           : <a href="#" style={S.postTag}>#community</a>}
       </div>
 
-      {/* Post Actions */}
+      {/* ── Post Actions ── */}
       <div id={postIndex === 0 ? "post-actions-0" : undefined} style={S.postActions}>
         <div style={S.postActionsGroup}>
           {type !== "poll" && (
@@ -480,18 +571,26 @@ export default function PostCard({
         )}
       </div>
 
-      {/* Comments Section */}
+      {/* ── Comments Section ── */}
       {openCommentsFor === post.id && (
         <div style={{ display: "flex", flexDirection: "column", gap: 10, borderTop: "1px solid var(--border-color)", paddingTop: 12 }}>
           {(post.comments || []).length === 0
             ? <p style={{ color: "var(--text-muted)", fontSize: "0.82rem", margin: 0 }}>No comments yet. Be the first!</p>
             : (post.comments || []).slice().sort((a, b) => a.createdAt - b.createdAt).map((c) => {
               const isEditingThis = editingComment?.postId === post.id && editingComment?.createdAt === c.createdAt;
-              const isOwner = user?.uid === c.uid;
-              const commentPhoto = getLivePhoto(c.uid, c.photoURL);
-              const commentName = getLiveName(c.uid, c.displayName);
+              const isOwner       = user?.uid === c.uid;
+              const commentPhoto  = getLivePhoto(c.uid, c.photoURL);
+              const commentName   = getLiveName(c.uid, c.displayName);
+              const commentKey    = `${c.uid}-${c.createdAt}`;
+              const isPickerOpen  = openPickerFor === commentKey;
+
+              // extra emojis that already have at least one reaction (show inline)
+              const activeExtra = Object.keys(c.reactions || {})
+                .filter((e) => !DEFAULT_EMOJIS.includes(e) && (c.reactions[e]?.length || 0) > 0);
+
               return (
-                <div key={`${c.uid}-${c.createdAt}`} style={S.commentItem}>
+                <div key={commentKey} style={S.commentItem}>
+                  {/* Comment header */}
                   <div style={S.commentHeader}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                       <UserAvatar
@@ -519,6 +618,8 @@ export default function PostCard({
                       )}
                     </div>
                   </div>
+
+                  {/* Edit mode or body + reactions */}
                   {isEditingThis ? (
                     <>
                       <textarea
@@ -533,12 +634,77 @@ export default function PostCard({
                       </div>
                     </>
                   ) : (
-                    <p style={{ ...S.commentBody, margin: 0 }}>{c.content}</p>
+                    <>
+                      <p style={{ ...S.commentBody, margin: 0 }}>{c.content}</p>
+
+                      {/* ── Reaction Bar ── */}
+                      <div
+                        style={{ position: "relative", marginTop: 6 }}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                          {/* Default 4 + any active extra emojis */}
+                          {[...DEFAULT_EMOJIS, ...activeExtra].map((emoji) => {
+                            const reactors   = c.reactions?.[emoji] || [];
+                            const hasReacted = reactors.includes(user?.uid);
+                            return (
+                              <button
+                                key={emoji}
+                                style={S.reactionBtn(hasReacted)}
+                                onClick={() => onToggleCommentReaction?.(post, c, emoji)}
+                                title={reactors.length > 0 ? `${reactors.length} reaction${reactors.length !== 1 ? "s" : ""}` : "React"}
+                              >
+                                <span>{emoji}</span>
+                                {reactors.length > 0 && (
+                                  <span style={{ fontSize: "0.72rem", minWidth: 10 }}>{reactors.length}</span>
+                                )}
+                              </button>
+                            );
+                          })}
+
+                          {/* Picker toggle */}
+                          <button
+                            style={S.pickerToggleBtn(isPickerOpen)}
+                            onClick={() => setOpenPickerFor(isPickerOpen ? null : commentKey)}
+                            title="More reactions"
+                          >
+                            {isPickerOpen ? "✕ Close" : "+ 😊"}
+                          </button>
+                        </div>
+
+                        {/* Expanded emoji picker */}
+                        {isPickerOpen && (
+                          <div style={S.pickerGrid}>
+                            {EXTRA_EMOJIS.map((emoji) => {
+                              const reactors   = c.reactions?.[emoji] || [];
+                              const hasReacted = reactors.includes(user?.uid);
+                              return (
+                                <button
+                                  key={emoji}
+                                  style={S.pickerEmojiBtn(hasReacted)}
+                                  title={`${emoji}${reactors.length > 0 ? ` · ${reactors.length}` : ""}`}
+                                  onClick={() => {
+                                    onToggleCommentReaction?.(post, c, emoji);
+                                    setOpenPickerFor(null);
+                                  }}
+                                >
+                                  {emoji}
+                                  {reactors.length > 0 && (
+                                    <span style={S.pickerBadge}>{reactors.length}</span>
+                                  )}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    </>
                   )}
                 </div>
               );
             })}
 
+          {/* Add comment input */}
           <div style={{ display: "flex", gap: 8 }}>
             <input
               style={{
