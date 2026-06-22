@@ -92,6 +92,7 @@ export default function Dashboard() {
   // ── Feed / UI state ──────────────────────────────────────────────────────
   const [posts, setPosts] = useState([]);
   const [activeTab, setActiveTab] = useState("latest");
+  const [activeTag, setActiveTag] = useState(null);
   const [activeMembers, setActiveMembers] = useState([]);
   const [usersCache, setUsersCache] = useState({});
   const [highlightedPostId, setHighlightedPostId] = useState(null);
@@ -312,10 +313,12 @@ export default function Dashboard() {
 
   // ── Memoized derived feed data ────────────────────────────────────────────
   const filteredPosts = useMemo(() => {
-    if (activeTab === "questions") return posts.filter((p) => p.postType === "question");
-    if (activeTab === "collaboration") return posts.filter((p) => p.postType === "collaboration");
-    return posts;
-  }, [posts, activeTab]);
+    let result = posts;
+    if (activeTab === "questions") result = posts.filter((p) => p.postType === "question");
+    else if (activeTab === "collaboration") result = posts.filter((p) => p.postType === "collaboration");
+    if (activeTag) result = result.filter((p) => (p.tags || []).includes(activeTag));
+    return result;
+  }, [posts, activeTab, activeTag]);
 
   const trendingPosts = useMemo(() => {
     const cutoff = Date.now() - 48 * 60 * 60 * 1000;
@@ -415,6 +418,12 @@ export default function Dashboard() {
       await setDoc(doc(db, "users", user.uid), {
         savedPosts: isSaved ? arrayRemove(postId) : arrayUnion(postId),
       }, { merge: true });
+
+      const post = posts.find((p) => p.id === postId);
+      const currentCount = post?.saveCount || 0;
+      await updateDoc(doc(db, "posts", postId), {
+        saveCount: isSaved ? Math.max(0, currentCount - 1) : currentCount + 1,
+      });
     } catch (err) { console.error(err); setError("Failed to update saved posts."); }
   };
 
@@ -583,7 +592,12 @@ export default function Dashboard() {
 
               <FeedColumn {...feedColumnProps} />
 
-              <RightSidebar trendingTags={trendingTags} activeMembers={activeMembers} />
+              <RightSidebar 
+                  trendingTags={trendingTags} 
+                  activeMembers={activeMembers}
+                  activeTag={activeTag}
+                  onTagClick={(tag) => setActiveTag((prev) => prev === tag ? null : tag)}
+              />
             </div>
           )}
 
