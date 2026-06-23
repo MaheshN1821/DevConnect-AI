@@ -15,8 +15,11 @@ import {
   doc,
   orderBy,
   getDoc,
+  deleteDoc,
+  arrayUnion,
+  arrayRemove,
 } from "firebase/firestore";
-import { updateProfile } from "firebase/auth";
+import { updateProfile, deleteUser } from "firebase/auth";
 
 function useIsMobile(breakpoint = 640) {
   const [isMobile, setIsMobile] = useState(false);
@@ -29,7 +32,6 @@ function useIsMobile(breakpoint = 640) {
   return isMobile;
 }
 
-// ── Preset platforms users can pick from ─────────────────────────────────────
 const LINK_PRESETS = [
   { key: "github",    label: "GitHub",    icon: "🐙", placeholder: "https://github.com/username" },
   { key: "twitter",   label: "Twitter/X", icon: "🐦", placeholder: "https://twitter.com/username" },
@@ -45,7 +47,24 @@ function getPreset(key) {
   return LINK_PRESETS.find((p) => p.key === key) || { icon: "🔗", label: key, placeholder: "https://..." };
 }
 
-// ── Styles ────────────────────────────────────────────────────────────────────
+const SKILL_PRESETS = [
+  { key: "frontend",   label: "Frontend Developer",  color: "#3b82f6" },
+  { key: "backend",    label: "Backend Developer",   color: "#8b5cf6" },
+  { key: "fullstack",  label: "Full Stack Developer", color: "#10b981" },
+  { key: "mobile",     label: "Mobile Developer",    color: "#f97316" },
+  { key: "devops",     label: "DevOps Engineer",     color: "#ef4444" },
+  { key: "ai_ml",      label: "AI / ML Engineer",    color: "#06b6d4" },
+  { key: "design",     label: "UI/UX Designer",      color: "#ec4899" },
+  { key: "data",       label: "Data Scientist",      color: "#eab308" },
+  { key: "blockchain", label: "Blockchain Dev",      color: "#6366f1" },
+];
+const MAX_SKILLS = 8;
+const MAX_PINNED = 2;
+
+function getSkillMeta(key) {
+  return SKILL_PRESETS.find((s) => s.key === key) || { key, label: key, color: "#64748b" };
+}
+
 const S = {
   navbar: {
     position: "fixed", top: 0, left: 0, width: "100%", height: 64,
@@ -121,6 +140,13 @@ const S = {
     border: "1px solid rgba(239, 68, 68, 0.3)", borderRadius: "var(--radius-md)",
     color: "#ef4444", fontWeight: 600, fontSize: "0.95rem", cursor: "pointer",
     fontFamily: "inherit",
+  },
+  btnDeleteAccount: {
+    width: "100%", padding: 12, background: "transparent",
+    border: "1px solid rgba(239, 68, 68, 0.2)", borderRadius: "var(--radius-md)",
+    color: "rgba(239, 68, 68, 0.6)", fontWeight: 500, fontSize: "0.88rem",
+    cursor: "pointer", fontFamily: "inherit", marginTop: 8,
+    transition: "all 0.15s",
   },
   successMsg: { color: "var(--accent-success)", fontSize: "0.82rem", margin: "6px 0 0 0" },
   errorMsg: { color: "#ef4444", fontSize: "0.82rem", margin: "6px 0 0 0" },
@@ -211,13 +237,96 @@ function UserListModal({ title, uids, onClose }) {
   );
 }
 
-// ── Dynamic links editor (used in both mobile + desktop edit mode) ────────────
-// linksInput: [{ key, url }]  — key matches a preset or is "custom_N"
+// ── Delete Account Confirmation Modal ─────────────────────────────────────────
+function DeleteAccountModal({ onConfirm, onClose, deleting, deleteError }) {
+  const [confirmText, setConfirmText] = useState("");
+  const canDelete = confirmText === "DELETE";
+
+  return (
+    <div style={S.modalOverlay} onClick={onClose}>
+      <div style={{ ...S.modalBox, maxWidth: 420 }} onClick={(e) => e.stopPropagation()}>
+        {/* Header */}
+        <div style={{ textAlign: "center", marginBottom: 20 }}>
+          <div style={{ fontSize: "2.5rem", marginBottom: 8 }}>⚠️</div>
+          <h3 style={{ color: "#ef4444", fontWeight: 700, fontSize: "1.1rem", margin: "0 0 6px 0" }}>
+            Delete Account
+          </h3>
+          <p style={{ color: "var(--text-muted)", fontSize: "0.85rem", margin: 0, lineHeight: 1.5 }}>
+            This action is <strong style={{ color: "var(--text-primary)" }}>permanent and irreversible</strong>.
+            Your profile, posts, and all data will be deleted forever.
+          </p>
+        </div>
+
+        {/* Warning box */}
+        <div style={{
+          background: "rgba(239, 68, 68, 0.08)", border: "1px solid rgba(239, 68, 68, 0.25)",
+          borderRadius: "var(--radius-md)", padding: "12px 14px", marginBottom: 18,
+        }}>
+          <p style={{ color: "#ef4444", fontSize: "0.8rem", margin: 0, lineHeight: 1.6 }}>
+            You will lose access to:<br />
+            • Your profile and bio<br />
+            • All your posts and comments<br />
+            • Your followers and following list<br />
+            • Your activity streak
+          </p>
+        </div>
+
+        {/* Confirmation input */}
+        <div style={{ marginBottom: 16 }}>
+          <label style={{ ...S.infoLabel, display: "block", marginBottom: 6 }}>
+            Type <strong style={{ color: "#ef4444", fontStyle: "normal" }}>DELETE</strong> to confirm
+          </label>
+          <input
+            style={{
+              ...S.input,
+              borderColor: confirmText && !canDelete ? "rgba(239,68,68,0.5)" : "var(--border-color)",
+            }}
+            value={confirmText}
+            onChange={(e) => setConfirmText(e.target.value)}
+            placeholder="DELETE"
+            autoFocus
+          />
+        </div>
+
+        {deleteError && (
+          <p style={{ ...S.errorMsg, marginBottom: 12 }}>{deleteError}</p>
+        )}
+
+        {/* Actions */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <button
+            onClick={() => canDelete && onConfirm()}
+            disabled={!canDelete || deleting}
+            style={{
+              width: "100%", padding: "11px 0",
+              background: canDelete ? "#ef4444" : "rgba(239,68,68,0.2)",
+              border: "none", borderRadius: "var(--radius-md)",
+              color: canDelete ? "#fff" : "rgba(239,68,68,0.5)",
+              fontWeight: 700, fontSize: "0.92rem", cursor: canDelete && !deleting ? "pointer" : "not-allowed",
+              fontFamily: "inherit", transition: "all 0.15s",
+            }}
+          >
+            {deleting ? "Deleting…" : "Yes, permanently delete my account"}
+          </button>
+          <button
+            onClick={onClose}
+            disabled={deleting}
+            style={{ ...S.btnGhost, width: "100%", textAlign: "center" }}
+          >
+            Cancel, keep my account
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Dynamic links editor ──────────────────────────────────────────────────────
 function LinksEditor({ linksInput, setLinksInput }) {
   const [showPicker, setShowPicker] = useState(false);
 
   const addPreset = (preset) => {
-    if (linksInput.find((l) => l.key === preset.key)) return; // already added
+    if (linksInput.find((l) => l.key === preset.key)) return;
     setLinksInput((prev) => [...prev, { key: preset.key, url: "" }]);
     setShowPicker(false);
   };
@@ -229,13 +338,8 @@ function LinksEditor({ linksInput, setLinksInput }) {
   };
 
   const removeLink = (key) => setLinksInput((prev) => prev.filter((l) => l.key !== key));
-
-  const updateUrl = (key, url) =>
-    setLinksInput((prev) => prev.map((l) => l.key === key ? { ...l, url } : l));
-
-  const updateLabel = (key, label) =>
-    setLinksInput((prev) => prev.map((l) => l.key === key ? { ...l, label } : l));
-
+  const updateUrl = (key, url) => setLinksInput((prev) => prev.map((l) => l.key === key ? { ...l, url } : l));
+  const updateLabel = (key, label) => setLinksInput((prev) => prev.map((l) => l.key === key ? { ...l, label } : l));
   const availablePresets = LINK_PRESETS.filter((p) => !linksInput.find((l) => l.key === p.key));
 
   return (
@@ -245,7 +349,6 @@ function LinksEditor({ linksInput, setLinksInput }) {
           No links added yet. Use the button below to add one.
         </p>
       )}
-
       {linksInput.map((link) => {
         const preset = getPreset(link.key);
         const isCustom = link.key.startsWith("custom_");
@@ -281,8 +384,6 @@ function LinksEditor({ linksInput, setLinksInput }) {
           </div>
         );
       })}
-
-      {/* Add link button + picker */}
       <div style={{ position: "relative" }}>
         <button
           onClick={() => setShowPicker((v) => !v)}
@@ -290,7 +391,6 @@ function LinksEditor({ linksInput, setLinksInput }) {
         >
           + Add Link
         </button>
-
         {showPicker && (
           <div style={{
             position: "absolute", top: "calc(100% + 6px)", left: 0,
@@ -336,7 +436,6 @@ function LinksDisplay({ links }) {
     <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
       {entries.map(([key, url]) => {
         const p = getPreset(key);
-        const label = key.startsWith("custom_") ? (url) : `${p.icon} ${p.label}`;
         return (
           <a key={key} href={url} target="_blank" rel="noreferrer"
             style={{ color: "var(--accent-primary)", fontSize: "0.85rem", textDecoration: "none", display: "flex", alignItems: "center", gap: 6 }}>
@@ -351,14 +450,180 @@ function LinksDisplay({ links }) {
   );
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-// Convert flat links object (from Firestore) → array for editor
-function linksObjToArr(obj) {
-  return Object.entries(obj)
-    .filter(([, url]) => url)
-    .map(([key, url]) => ({ key, url }));
+// ── Skills picker (edit mode) ─────────────────────────────────────────────────
+function SkillsPicker({ skillsInput, setSkillsInput }) {
+  const [customText, setCustomText] = useState("");
+  const atLimit = skillsInput.length >= MAX_SKILLS;
+
+  const togglePreset = (key) => {
+    setSkillsInput((prev) => {
+      if (prev.includes(key)) return prev.filter((s) => s !== key);
+      if (prev.length >= MAX_SKILLS) return prev;
+      return [...prev, key];
+    });
+  };
+
+  const addCustom = () => {
+    const text = customText.trim();
+    if (!text) return;
+    setCustomText("");
+    if (skillsInput.some((s) => s.toLowerCase() === text.toLowerCase())) return;
+    if (skillsInput.length >= MAX_SKILLS) return;
+    setSkillsInput((prev) => [...prev, text]);
+  };
+
+  const removeSkill = (key) => setSkillsInput((prev) => prev.filter((s) => s !== key));
+  const customSkills = skillsInput.filter((s) => !SKILL_PRESETS.find((p) => p.key === s));
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+        {SKILL_PRESETS.map((opt) => {
+          const active = skillsInput.includes(opt.key);
+          return (
+            <button
+              key={opt.key}
+              type="button"
+              onClick={() => togglePreset(opt.key)}
+              disabled={!active && atLimit}
+              style={{
+                padding: "5px 12px", borderRadius: "var(--radius-full)",
+                border: `1px solid ${active ? opt.color : "var(--border-color)"}`,
+                background: active ? `${opt.color}22` : "transparent",
+                color: active ? opt.color : "var(--text-secondary)",
+                fontSize: "0.78rem", fontWeight: 600, fontFamily: "inherit",
+                cursor: (!active && atLimit) ? "not-allowed" : "pointer",
+                opacity: (!active && atLimit) ? 0.5 : 1,
+                transition: "all 0.15s",
+              }}
+            >
+              {active ? "✓ " : ""}{opt.label}
+            </button>
+          );
+        })}
+      </div>
+      {customSkills.length > 0 && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+          {customSkills.map((s) => (
+            <span key={s} style={{
+              display: "inline-flex", alignItems: "center", gap: 6,
+              padding: "5px 10px", borderRadius: "var(--radius-full)",
+              border: "1px solid #64748b88", background: "#64748b22",
+              color: "#94a3b8", fontSize: "0.78rem", fontWeight: 600,
+            }}>
+              {s}
+              <button
+                onClick={() => removeSkill(s)}
+                style={{ background: "none", border: "none", cursor: "pointer", color: "inherit", fontSize: "0.75rem", padding: 0, lineHeight: 1 }}
+                title="Remove"
+              >✕</button>
+            </span>
+          ))}
+        </div>
+      )}
+      <div style={{ display: "flex", gap: 6 }}>
+        <input
+          style={{ ...S.input, fontSize: "0.82rem", padding: "6px 10px" }}
+          value={customText}
+          onChange={(e) => setCustomText(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addCustom(); } }}
+          placeholder="Other (e.g. Game Dev, QA)…"
+          maxLength={24}
+          disabled={atLimit}
+        />
+        <button onClick={addCustom} type="button" disabled={atLimit} style={{ ...S.btnGhost, fontSize: "0.78rem", padding: "6px 14px", whiteSpace: "nowrap", opacity: atLimit ? 0.5 : 1, cursor: atLimit ? "not-allowed" : "pointer" }}>
+          + Add
+        </button>
+      </div>
+      <span style={{ fontSize: "0.7rem", color: "var(--text-muted)" }}>{skillsInput.length}/{MAX_SKILLS} selected</span>
+    </div>
+  );
 }
-// Convert editor array → flat object for Firestore
+
+// ── Skill badges (view mode) ──────────────────────────────────────────────────
+function SkillBadges({ skills }) {
+  if (!skills || skills.length === 0) return null;
+  return (
+    <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+      {skills.map((key) => {
+        const meta = getSkillMeta(key);
+        return (
+          <span key={key} style={{
+            padding: "3px 11px", borderRadius: "var(--radius-full)",
+            border: `1px solid ${meta.color}55`, background: `${meta.color}1a`,
+            color: meta.color, fontSize: "0.74rem", fontWeight: 600,
+          }}>
+            {meta.label}
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── Collab toggle (edit mode) ─────────────────────────────────────────────────
+function CollabToggle({ value, onChange, disabled = false, label = "Open to Collaboration" }) {
+  return (
+    <div
+      onClick={() => { if (!disabled) onChange(!value); }}
+      role="switch"
+      aria-checked={value}
+      aria-disabled={disabled}
+      style={{
+        display: "inline-flex", alignItems: "center", gap: 10,
+        cursor: disabled ? "default" : "pointer", userSelect: "none",
+        opacity: disabled ? 0.6 : 1, transition: "opacity 0.15s",
+      }}
+    >
+      <div style={{
+        width: 40, height: 22, borderRadius: "var(--radius-full)",
+        background: value ? "#22c55e" : "var(--border-color)",
+        position: "relative", transition: "background 0.2s", flexShrink: 0,
+      }}>
+        <div style={{
+          position: "absolute", top: 2, left: value ? 20 : 2,
+          width: 18, height: 18, borderRadius: "50%", background: "#fff",
+          transition: "left 0.2s", boxShadow: "0 1px 3px rgba(0,0,0,0.3)",
+        }} />
+      </div>
+      <span style={{ fontSize: "0.85rem", color: "var(--text-primary)", fontWeight: 500 }}>{label}</span>
+    </div>
+  );
+}
+
+// ── Collab badge (view mode) ──────────────────────────────────────────────────
+function CollabBadge() {
+  return (
+    <span style={{
+      display: "inline-flex", alignItems: "center", gap: 6,
+      padding: "3px 11px", borderRadius: "var(--radius-full)",
+      background: "rgba(34,197,94,0.12)", border: "1px solid rgba(34,197,94,0.4)",
+      color: "#22c55e", fontSize: "0.74rem", fontWeight: 600,
+    }}>
+      <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#22c55e", flexShrink: 0 }} />
+      Open to Collaborate
+    </span>
+  );
+}
+
+// ── Streak badge (view mode) ──────────────────────────────────────────────────
+function StreakBadge({ count }) {
+  return (
+    <span style={{
+      display: "inline-flex", alignItems: "center", gap: 6,
+      padding: "3px 11px", borderRadius: "var(--radius-full)",
+      background: "rgba(251,146,60,0.12)", border: "1px solid rgba(251,146,60,0.4)",
+      color: "#fb923c", fontSize: "0.74rem", fontWeight: 700,
+    }}>
+      🔥 {count} day streak
+    </span>
+  );
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function linksObjToArr(obj) {
+  return Object.entries(obj).filter(([, url]) => url).map(([key, url]) => ({ key, url }));
+}
 function linksArrToObj(arr) {
   const obj = {};
   arr.forEach(({ key, url, label }) => {
@@ -368,8 +633,12 @@ function linksArrToObj(arr) {
   return obj;
 }
 
-// ── EditForm (top-level so React never remounts inputs on parent re-render) ───
-function EditForm({ nameInput, setNameInput, bioInput, setBioInput, linksInput, setLinksInput, editSaving, editMsg, onSave, onCancel }) {
+// ── EditForm ──────────────────────────────────────────────────────────────────
+function EditForm({
+  nameInput, setNameInput, bioInput, setBioInput, linksInput, setLinksInput,
+  skillsInput, setSkillsInput, collabInput, setCollabInput,
+  editSaving, editMsg, onSave, onCancel,
+}) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       <div>
@@ -399,6 +668,14 @@ function EditForm({ nameInput, setNameInput, bioInput, setBioInput, linksInput, 
         />
       </div>
       <div>
+        <div style={{ ...S.infoLabel, marginBottom: 8 }}>Tech Stack / Skills</div>
+        <SkillsPicker skillsInput={skillsInput} setSkillsInput={setSkillsInput} />
+      </div>
+      <div>
+        <div style={{ ...S.infoLabel, marginBottom: 8 }}>Collaboration</div>
+        <CollabToggle value={collabInput} onChange={setCollabInput} />
+      </div>
+      <div>
         <div style={{ ...S.infoLabel, marginBottom: 8 }}>Social Links</div>
         <LinksEditor linksInput={linksInput} setLinksInput={setLinksInput} />
       </div>
@@ -415,7 +692,7 @@ function EditForm({ nameInput, setNameInput, bioInput, setBioInput, linksInput, 
   );
 }
 
-// ── AvatarWidget (top-level for same reason) ──────────────────────────────────
+// ── AvatarWidget ──────────────────────────────────────────────────────────────
 function AvatarWidget({ size, currentPhotoURL, displayName, photoUploading, photoMsg, avatarHovered, setAvatarHovered, fileInputRef }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8, flexShrink: 0 }}>
@@ -464,6 +741,106 @@ function AvatarWidget({ size, currentPhotoURL, displayName, photoUploading, phot
   );
 }
 
+// ── Post card ─────────────────────────────────────────────────────────────────
+function PostCard({ post, S, pinned, onTogglePin, pinDisabled }) {
+  const typeLabel = post.postType === "question" ? "Question" : post.postType === "collaboration" ? "Collaborate" : "Discussion";
+  const ts = post.timestamp?.toDate
+    ? post.timestamp.toDate().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+    : "Recently";
+  const snippet = post.content?.replace(/[#*`>_~]/g, "").slice(0, 140) + (post.content?.length > 140 ? "…" : "");
+
+  return (
+    <div
+  style={{
+    ...S.postCard,
+    ...(pinned ? { border: "1px solid var(--accent-primary)", boxShadow: "0 0 0 1px var(--accent-primary-alpha)" } : {}),
+  }}
+  onMouseEnter={(e) => { if (!pinned) e.currentTarget.style.border = "1px solid var(--accent-primary)"; }}
+  onMouseLeave={(e) => { if (!pinned) e.currentTarget.style.border = "1px solid var(--border-color)"; }}
+>
+      <div style={S.postMeta}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={S.postTypeTag}>{typeLabel}</span>
+          {pinned && (
+            <span style={{
+              fontSize: "0.68rem", fontWeight: 700, color: "var(--accent-primary)",
+              display: "flex", alignItems: "center", gap: 3,
+            }}>
+              📌 Pinned
+            </span>
+          )}
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <span style={S.postTimestamp}>{ts}{post.edited ? " (edited)" : ""}</span>
+          {onTogglePin && (
+            <button
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); onTogglePin(post.id); }}
+              disabled={!pinned && pinDisabled}
+              title={pinned ? "Unpin post" : "Pin post"}
+              style={{
+                background: "none", border: "none",
+                cursor: (!pinned && pinDisabled) ? "not-allowed" : "pointer",
+                fontSize: "0.85rem", padding: "2px 4px", lineHeight: 1,
+                opacity: (!pinned && pinDisabled) ? 0.35 : 1,
+                color: pinned ? "var(--accent-primary)" : "var(--text-muted)",
+              }}
+            >
+              📌
+            </button>
+          )}
+        </div>
+      </div>
+      <Link href="/dashboard" style={{ textDecoration: "none" }}>
+        <p style={S.postContent}>{snippet || "(no content)"}</p>
+      </Link>
+      {post.tags?.length > 0 && (
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          {post.tags.map((t) => (
+            <span key={t} style={{ fontSize: "0.7rem", color: "var(--accent-primary)", background: "var(--accent-primary-alpha)", padding: "2px 7px", borderRadius: "var(--radius-full)" }}>{t}</span>
+          ))}
+        </div>
+      )}
+      <div style={S.postStats}>
+        <span>♡ {post.likes || 0}</span>
+        <span>💬 {post.comments?.length || 0}</span>
+      </div>
+    </div>
+  );
+}
+
+// ── Posts section (mobile) ────────────────────────────────────────────────────
+function PostsSection({ myPosts, postCount, S, cm, pinnedPosts, onTogglePin, pinDisabled, pinError }) {
+  return (
+    <div style={{ ...S.card, ...cm, marginTop: 14 }}>
+      <h2 style={{ color: "var(--text-primary)", fontSize: "1rem", margin: "0 0 16px 0", fontWeight: 600 }}>
+        My Posts <span style={{ color: "var(--text-muted)", fontWeight: 400, fontSize: "0.85rem" }}>({postCount})</span>
+      </h2>
+      {pinError && <p style={{ color: "#ef4444", fontSize: "0.78rem", margin: "0 0 10px 0" }}>{pinError}</p>}
+      {myPosts.length === 0 ? (
+        <div style={{ textAlign: "center", padding: "24px 0" }}>
+          <p style={{ color: "var(--text-muted)", fontSize: "0.88rem", margin: "0 0 12px 0" }}>You haven't posted anything yet.</p>
+          <Link href="/dashboard" style={{ padding: "8px 18px", backgroundColor: "var(--accent-primary)", border: "none", borderRadius: "var(--radius-md)", color: "#000", fontWeight: 600, fontSize: "0.85rem", textDecoration: "none", display: "inline-block" }}>
+            Go to Dashboard
+          </Link>
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {myPosts.map((post) => (
+            <PostCard
+              key={post.id}
+              post={post}
+              S={S}
+              pinned={pinnedPosts.includes(post.id)}
+              onTogglePin={onTogglePin}
+              pinDisabled={pinDisabled}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function Profile() {
   const { user, logout, loading } = useAuth();
@@ -477,17 +854,20 @@ export default function Profile() {
   const [photoUploading, setPhotoUploading] = useState(false);
   const [photoMsg, setPhotoMsg] = useState(null);
 
-  // unified edit state
   const [editing, setEditing] = useState(false);
   const [nameInput, setNameInput] = useState("");
   const [bioInput, setBioInput] = useState("");
-  const [linksInput, setLinksInput] = useState([]); // [{ key, url, label? }]
+  const [linksInput, setLinksInput] = useState([]);
+  const [skillsInput, setSkillsInput] = useState([]);
+  const [collabInput, setCollabInput] = useState(false);
   const [editSaving, setEditSaving] = useState(false);
   const [editMsg, setEditMsg] = useState(null);
 
-  // saved values
   const [bio, setBio] = useState("");
   const [links, setLinks] = useState({});
+  const [skills, setSkills] = useState([]);
+  const [openToCollaborate, setOpenToCollaborate] = useState(false);
+  const [streak, setStreak] = useState(0);
 
   const [followers, setFollowers] = useState([]);
   const [following, setFollowing] = useState([]);
@@ -495,6 +875,15 @@ export default function Profile() {
   const [showFollowing, setShowFollowing] = useState(false);
   const [myPosts, setMyPosts] = useState([]);
   const [postCount, setPostCount] = useState(0);
+
+  // ── Pinned posts state ──
+  const [pinnedPosts, setPinnedPosts] = useState([]);
+  const [pinError, setPinError] = useState("");
+
+  // ── Delete account state ──
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
 
   useEffect(() => { if (!loading && !user) router.push("/login"); }, [user, loading, router]);
   useEffect(() => { if (user) setCurrentPhotoURL(user.photoURL || ""); }, [user]);
@@ -505,14 +894,16 @@ export default function Profile() {
       if (!snap.exists()) return;
       const data = snap.data();
       setBio(data.bio || "");
-      // collect all link keys from data (any key that starts with known preset or custom_)
       const linkObj = {};
       LINK_PRESETS.forEach(({ key }) => { if (data[key]) linkObj[key] = data[key]; });
-      // pick up custom_ keys
       Object.keys(data).forEach((k) => { if (k.startsWith("custom_") && !k.endsWith("_label")) linkObj[k] = data[k]; });
       setLinks(linkObj);
+      setSkills(Array.isArray(data.skills) ? data.skills : []);
+      setOpenToCollaborate(!!data.openToCollaborate);
       setFollowers(data.followers || []);
       setFollowing(data.following || []);
+      setStreak(data.streak || 0);
+      setPinnedPosts(Array.isArray(data.pinnedPosts) ? data.pinnedPosts : []);
     });
     return () => unsub();
   }, [user]);
@@ -538,31 +929,40 @@ export default function Profile() {
     ? new Date(user.metadata.creationTime).toLocaleDateString("en-US", { month: "long", year: "numeric" })
     : "Recently";
 
-  // ── Open edit mode ──────────────────────────────────────────────────────────
+  // Pinned posts float to the top, preserving relative order otherwise
+  const sortedPosts = [...myPosts].sort((a, b) => {
+    const aPinned = pinnedPosts.includes(a.id);
+    const bPinned = pinnedPosts.includes(b.id);
+    if (aPinned && !bPinned) return -1;
+    if (!aPinned && bPinned) return 1;
+    return 0;
+  });
+
   const startEditing = () => {
     setNameInput(user.displayName || "");
     setBioInput(bio);
     setLinksInput(linksObjToArr(links));
+    setSkillsInput(skills);
+    setCollabInput(openToCollaborate);
     setEditing(true);
     setEditMsg(null);
   };
 
-  // ── Save everything ─────────────────────────────────────────────────────────
   const handleSaveProfile = async () => {
     if (!nameInput.trim()) { setEditMsg({ type: "error", text: "Name cannot be empty." }); return; }
     if (bioInput.length > 200) { setEditMsg({ type: "error", text: "Bio must be 200 chars or less." }); return; }
     setEditSaving(true); setEditMsg(null);
     try {
       await updateProfile(user, { displayName: nameInput.trim() });
-      // build links object — first clear all old link keys, then set new ones
       const cleanedLinks = {};
       LINK_PRESETS.forEach(({ key }) => { cleanedLinks[key] = ""; });
-      // clear old custom keys (we'll re-save current ones)
       Object.keys(links).forEach((k) => { if (k.startsWith("custom_")) cleanedLinks[k] = ""; });
       const newLinks = linksArrToObj(linksInput);
       await setDoc(doc(db, "users", user.uid), {
         displayName: nameInput.trim(),
         bio: bioInput.trim(),
+        skills: skillsInput.slice(0, MAX_SKILLS),
+        openToCollaborate: collabInput,
         ...cleanedLinks,
         ...newLinks,
       }, { merge: true });
@@ -573,14 +973,13 @@ export default function Profile() {
     } finally { setEditSaving(false); }
   };
 
-  // ── Photo ───────────────────────────────────────────────────────────────────
   const handlePhotoChange = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
     if (!file.type.startsWith("image/")) { setPhotoMsg({ type: "error", text: "Please select an image file." }); return; }
     if (file.size > 5 * 1024 * 1024) { setPhotoMsg({ type: "error", text: "Image must be under 5MB." }); return; }
     setPhotoUploading(true); setPhotoMsg(null);
-    try { 
+    try {
       const formData = new FormData();
       formData.append("file", file);
       formData.append("upload_preset", process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET);
@@ -596,11 +995,9 @@ export default function Profile() {
       await setDoc(doc(db, "users", user.uid), { photoURL }, { merge: true });
       setCurrentPhotoURL(photoURL);
       setPhotoMsg({ type: "success", text: "Photo updated!" });
-    } catch (err) { 
-  
-  setPhotoMsg({ type: "error", text: "Upload failed. Try again." }); 
-}
-    finally { setPhotoUploading(false); if (fileInputRef.current) fileInputRef.current.value = ""; }
+    } catch (err) {
+      setPhotoMsg({ type: "error", text: "Upload failed. Try again." });
+    } finally { setPhotoUploading(false); if (fileInputRef.current) fileInputRef.current.value = ""; }
   };
 
   const handleLogout = async () => {
@@ -608,11 +1005,82 @@ export default function Profile() {
     catch { console.error("Logout failed"); }
   };
 
+  // ── Pin/unpin handler ─────────────────────────────────────────────────────
+  const handleTogglePin = async (postId) => {
+    setPinError("");
+    const isPinned = pinnedPosts.includes(postId);
+    if (!isPinned && pinnedPosts.length >= MAX_PINNED) {
+      setPinError(`You can only pin up to ${MAX_PINNED} posts. Unpin one first.`);
+      return;
+    }
+    try {
+      await setDoc(
+        doc(db, "users", user.uid),
+        { pinnedPosts: isPinned ? arrayRemove(postId) : arrayUnion(postId) },
+        { merge: true }
+      );
+    } catch {
+      setPinError("Failed to update pin. Try again.");
+    }
+  };
+
+  // ── Delete account handler ────────────────────────────────────────────────
+  const handleDeleteAccount = async () => {
+    setDeleting(true);
+    setDeleteError("");
+    try {
+      // 1. Delete Firestore user document
+      await deleteDoc(doc(db, "users", user.uid));
+      // 2. Delete Firebase Auth account
+      await deleteUser(user);
+      // 3. Redirect to home
+      router.push("/");
+    } catch (err) {
+      // Firebase requires recent login for deleteUser — handle that gracefully
+      if (err.code === "auth/requires-recent-login") {
+        setDeleteError("For security, please log out and log back in before deleting your account.");
+      } else {
+        setDeleteError("Failed to delete account. Please try again.");
+      }
+      setDeleting(false);
+    }
+  };
+
   const cm = isMobile ? S.cardMobile : {};
+  const pinDisabled = pinnedPosts.length >= MAX_PINNED;
+
+  // ── Shared account actions block (Sign Out + Delete) ──────────────────────
+  const AccountActions = () => (
+    <div style={{ marginTop: isMobile ? 20 : 24, display: "flex", flexDirection: "column", gap: 0 }}>
+      <button
+        onClick={handleLogout}
+        style={S.btnSignOut}
+        onMouseEnter={(e) => { e.target.style.background = "rgba(239, 68, 68, 0.15)"; }}
+        onMouseLeave={(e) => { e.target.style.background = "rgba(239, 68, 68, 0.1)"; }}
+      >
+        Sign Out
+      </button>
+      <button
+        onClick={() => { setDeleteError(""); setShowDeleteModal(true); }}
+        style={S.btnDeleteAccount}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.background = "rgba(239, 68, 68, 0.06)";
+          e.currentTarget.style.color = "#ef4444";
+          e.currentTarget.style.borderColor = "rgba(239, 68, 68, 0.4)";
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.background = "transparent";
+          e.currentTarget.style.color = "rgba(239, 68, 68, 0.6)";
+          e.currentTarget.style.borderColor = "rgba(239, 68, 68, 0.2)";
+        }}
+      >
+        🗑️ Delete Account
+      </button>
+    </div>
+  );
 
   return (
     <main style={S.main}>
-      {/* ── Navbar ── */}
       <header style={{ ...S.navbar, ...(isMobile ? S.navbarMobile : {}) }}>
         <Link href="/dashboard" style={{ ...S.navBrand, ...(isMobile ? S.navBrandMobile : {}) }}>
           <span>{isMobile ? "🧠 DevConnect" : "🧠 DevConnect AI"}</span>
@@ -636,7 +1104,6 @@ export default function Profile() {
 
       <div style={isMobile ? S.containerMobile : S.container}>
         {isMobile ? (
-          /* ════════ MOBILE LAYOUT ════════ */
           <>
             {/* Hero card */}
             <div style={{ ...S.card, ...cm }}>
@@ -649,6 +1116,8 @@ export default function Profile() {
                       nameInput={nameInput} setNameInput={setNameInput}
                       bioInput={bioInput} setBioInput={setBioInput}
                       linksInput={linksInput} setLinksInput={setLinksInput}
+                      skillsInput={skillsInput} setSkillsInput={setSkillsInput}
+                      collabInput={collabInput} setCollabInput={setCollabInput}
                       editSaving={editSaving} editMsg={editMsg}
                       onSave={handleSaveProfile}
                       onCancel={() => { setEditing(false); setEditMsg(null); }}
@@ -663,6 +1132,15 @@ export default function Profile() {
                       <p style={{ color: "var(--text-muted)", margin: 0, fontSize: "0.88rem", wordBreak: "break-word" }}>{user.email}</p>
                     </div>
                     {bio && <p style={{ color: "var(--text-secondary)", fontSize: "0.85rem", textAlign: "center", margin: 0, maxWidth: 300 }}>{bio}</p>}
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8, justifyContent: "center" }}>
+                      {openToCollaborate && <CollabBadge />}
+                      <StreakBadge count={streak} />
+                    </div>
+                    {skills.length > 0 && (
+                      <div style={{ display: "flex", justifyContent: "center" }}>
+                        <SkillBadges skills={skills} />
+                      </div>
+                    )}
                     {Object.keys(links).length > 0 && (
                       <div style={{ display: "flex", gap: 12, flexWrap: "wrap", justifyContent: "center" }}>
                         {Object.entries(links).filter(([, url]) => url).map(([key, url]) => {
@@ -701,7 +1179,7 @@ export default function Profile() {
               ))}
             </div>
 
-            {/* Account info (read-only on mobile, editing handled in hero card) */}
+            {/* Account info */}
             <div style={{ ...S.card, ...cm, marginTop: 14 }}>
               <h2 style={{ color: "var(--text-primary)", fontSize: "1rem", margin: "0 0 16px 0", fontWeight: 600 }}>Account</h2>
               <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
@@ -709,40 +1187,57 @@ export default function Profile() {
                 <div style={S.divider} />
                 <div><div style={S.infoLabel}>Account Status</div><div style={{ ...S.infoValue, color: "var(--accent-success)" }}>✅ Active</div></div>
               </div>
-              <button onClick={handleLogout} style={{ ...S.btnSignOut, marginTop: 20 }}>Sign Out</button>
+              <AccountActions />
             </div>
 
-            {/* Posts */}
-            <PostsSection myPosts={myPosts} postCount={postCount} S={S} cm={cm} />
+            <PostsSection
+              myPosts={sortedPosts}
+              postCount={postCount}
+              S={S}
+              cm={cm}
+              pinnedPosts={pinnedPosts}
+              onTogglePin={handleTogglePin}
+              pinDisabled={pinDisabled}
+              pinError={pinError}
+            />
             <div style={{ height: 40 }} />
           </>
         ) : (
-          /* ════════ DESKTOP LAYOUT ════════ */
           <>
-            {/* ── Hero card ── */}
+            {/* Desktop hero card */}
             <div style={{ ...S.card, marginBottom: 20 }}>
               <div style={{ display: "flex", alignItems: "flex-start", gap: 28 }}>
                 <AvatarWidget size={100} currentPhotoURL={currentPhotoURL} displayName={user.displayName} photoUploading={photoUploading} photoMsg={photoMsg} avatarHovered={avatarHovered} setAvatarHovered={setAvatarHovered} fileInputRef={fileInputRef} />
 
-                {/* Name / bio / links — or edit form */}
                 <div style={{ flex: 1, minWidth: 0 }}>
                   {editing ? (
                     <EditForm
                       nameInput={nameInput} setNameInput={setNameInput}
                       bioInput={bioInput} setBioInput={setBioInput}
                       linksInput={linksInput} setLinksInput={setLinksInput}
+                      skillsInput={skillsInput} setSkillsInput={setSkillsInput}
+                      collabInput={collabInput} setCollabInput={setCollabInput}
                       editSaving={editSaving} editMsg={editMsg}
                       onSave={handleSaveProfile}
                       onCancel={() => { setEditing(false); setEditMsg(null); }}
                     />
                   ) : (
                     <>
-                      <h1 style={{ color: "var(--text-primary)", margin: "0 0 4px 0", fontSize: "1.5rem", fontWeight: 700 }}>
-                        {user.displayName || "Anonymous User"}
-                      </h1>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                        <h1 style={{ color: "var(--text-primary)", margin: "0 0 4px 0", fontSize: "1.5rem", fontWeight: 700 }}>
+                          {user.displayName || "Anonymous User"}
+                        </h1>
+                        {openToCollaborate && <CollabBadge />}
+                        <StreakBadge count={streak} />
+                      </div>
                       <p style={{ color: "var(--text-muted)", margin: "0 0 8px 0", fontSize: "0.9rem" }}>{user.email}</p>
                       {bio && (
                         <p style={{ color: "var(--text-secondary)", fontSize: "0.9rem", margin: "0 0 12px 0", lineHeight: 1.6, maxWidth: 560 }}>{bio}</p>
+                      )}
+                      {skills.length > 0 && (
+                        <div style={{ marginBottom: 12 }}>
+                          <SkillBadges skills={skills} />
+                        </div>
                       )}
                       {Object.keys(links).filter(k => links[k]).length > 0 && (
                         <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
@@ -762,7 +1257,6 @@ export default function Profile() {
                   )}
                 </div>
 
-                {/* Top-right: Edit + stats (only in view mode) */}
                 {!editing && (
                   <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 16 }}>
                     <button onClick={startEditing} style={{ ...S.btnGhost, display: "flex", alignItems: "center", gap: 6, whiteSpace: "nowrap" }}>
@@ -790,10 +1284,8 @@ export default function Profile() {
               </div>
             </div>
 
-            {/* ── Two-column bottom ── */}
+            {/* Two-column bottom */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1.6fr", gap: 20, alignItems: "start" }}>
-
-              {/* LEFT: Account details */}
               <div style={{ ...S.card, height: "100%", boxSizing: "border-box" }}>
                 <h2 style={{ color: "var(--text-muted)", fontSize: "0.9rem", margin: "0 0 18px 0", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em" }}>Account</h2>
                 <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -815,6 +1307,31 @@ export default function Profile() {
                   </div>
                   <div style={S.divider} />
                   <div>
+                    <div style={{ ...S.infoLabel, marginBottom: 8 }}>Tech Stack / Skills</div>
+                    {skills.length > 0
+                      ? <SkillBadges skills={skills} />
+                      : <span style={{ color: "var(--text-muted)", fontStyle: "italic", fontSize: "0.85rem" }}>No skills added yet.</span>}
+                  </div>
+                  <div style={S.divider} />
+                  <div>
+                    <div style={S.infoLabel}>Collaboration</div>
+                    <div style={{ marginTop: 4 }}>
+                      {openToCollaborate
+                        ? <CollabBadge />
+                        : <span style={{ color: "var(--text-muted)", fontStyle: "italic", fontSize: "0.85rem" }}>Not open to collaboration.</span>}
+                    </div>
+                  </div>
+                  <div style={S.divider} />
+                  <div>
+                    <div style={{ ...S.infoLabel, marginBottom: 8 }}>Activity Streak</div>
+                    <div style={{ marginTop: 4 }}>
+                      {streak > 0
+                        ? <StreakBadge count={streak} />
+                        : <span style={{ color: "var(--text-muted)", fontStyle: "italic", fontSize: "0.85rem" }}>No streak yet — post or comment to start one!</span>}
+                    </div>
+                  </div>
+                  <div style={S.divider} />
+                  <div>
                     <div style={{ ...S.infoLabel, marginBottom: 8 }}>Social Links</div>
                     <LinksDisplay links={links} />
                   </div>
@@ -824,20 +1341,15 @@ export default function Profile() {
                     <div style={{ ...S.infoValue, color: "var(--accent-success)" }}>✅ Active</div>
                   </div>
                 </div>
-                <button
-                  onClick={handleLogout}
-                  style={{ ...S.btnSignOut, marginTop: 24 }}
-                  onMouseEnter={(e) => { e.target.style.background = "rgba(239, 68, 68, 0.15)"; }}
-                  onMouseLeave={(e) => { e.target.style.background = "rgba(239, 68, 68, 0.1)"; }}
-                >Sign Out</button>
+                <AccountActions />
               </div>
 
-              {/* RIGHT: My Posts */}
               <div style={{ ...S.card, height: "100%", boxSizing: "border-box" }}>
                 <h2 style={{ color: "var(--text-muted)", fontSize: "0.9rem", margin: "0 0 18px 0", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                   <span>My Posts</span>
                   <span style={{ color: "var(--accent-primary)", fontWeight: 700, fontSize: "1rem", textTransform: "none", letterSpacing: 0 }}>{postCount}</span>
                 </h2>
+                {pinError && <p style={{ color: "#ef4444", fontSize: "0.78rem", margin: "0 0 12px 0" }}>{pinError}</p>}
                 {myPosts.length === 0 ? (
                   <div style={{ textAlign: "center", padding: "32px 0" }}>
                     <p style={{ color: "var(--text-muted)", fontSize: "0.9rem", margin: "0 0 14px 0" }}>You haven't posted anything yet.</p>
@@ -845,7 +1357,16 @@ export default function Profile() {
                   </div>
                 ) : (
                   <div style={{ display: "flex", flexDirection: "column", gap: 10, maxHeight: 520, overflowY: "auto" }}>
-                    {myPosts.map((post) => <PostCard key={post.id} post={post} S={S} />)}
+                    {sortedPosts.map((post) => (
+                      <PostCard
+                        key={post.id}
+                        post={post}
+                        S={S}
+                        pinned={pinnedPosts.includes(post.id)}
+                        onTogglePin={handleTogglePin}
+                        pinDisabled={pinDisabled}
+                      />
+                    ))}
                   </div>
                 )}
               </div>
@@ -858,62 +1379,16 @@ export default function Profile() {
 
       {showFollowers && <UserListModal title="Followers" uids={followers} onClose={() => setShowFollowers(false)} />}
       {showFollowing && <UserListModal title="Following" uids={following} onClose={() => setShowFollowing(false)} />}
-    </main>
-  );
-}
 
-// ── Post card ─────────────────────────────────────────────────────────────────
-function PostCard({ post, S }) {
-  const typeLabel = post.postType === "question" ? "Question" : post.postType === "collaboration" ? "Collaborate" : "Discussion";
-  const ts = post.timestamp?.toDate
-    ? post.timestamp.toDate().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
-    : "Recently";
-  const snippet = post.content?.replace(/[#*`>_~]/g, "").slice(0, 140) + (post.content?.length > 140 ? "…" : "");
-  return (
-    <Link href="/dashboard" style={{ textDecoration: "none" }}>
-      <div style={S.postCard}
-        onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent-primary)"; }}
-        onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border-color)"; }}>
-        <div style={S.postMeta}>
-          <span style={S.postTypeTag}>{typeLabel}</span>
-          <span style={S.postTimestamp}>{ts}{post.edited ? " (edited)" : ""}</span>
-        </div>
-        <p style={S.postContent}>{snippet || "(no content)"}</p>
-        {post.tags?.length > 0 && (
-          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-            {post.tags.map((t) => (
-              <span key={t} style={{ fontSize: "0.7rem", color: "var(--accent-primary)", background: "var(--accent-primary-alpha)", padding: "2px 7px", borderRadius: "var(--radius-full)" }}>{t}</span>
-            ))}
-          </div>
-        )}
-        <div style={S.postStats}>
-          <span>♡ {post.likes || 0}</span>
-          <span>💬 {post.comments?.length || 0}</span>
-        </div>
-      </div>
-    </Link>
-  );
-}
-
-// ── Posts section (mobile) ────────────────────────────────────────────────────
-function PostsSection({ myPosts, postCount, S, cm }) {
-  return (
-    <div style={{ ...S.card, ...cm, marginTop: 14 }}>
-      <h2 style={{ color: "var(--text-primary)", fontSize: "1rem", margin: "0 0 16px 0", fontWeight: 600 }}>
-        My Posts <span style={{ color: "var(--text-muted)", fontWeight: 400, fontSize: "0.85rem" }}>({postCount})</span>
-      </h2>
-      {myPosts.length === 0 ? (
-        <div style={{ textAlign: "center", padding: "24px 0" }}>
-          <p style={{ color: "var(--text-muted)", fontSize: "0.88rem", margin: "0 0 12px 0" }}>You haven't posted anything yet.</p>
-          <Link href="/dashboard" style={{ padding: "8px 18px", backgroundColor: "var(--accent-primary)", border: "none", borderRadius: "var(--radius-md)", color: "#000", fontWeight: 600, fontSize: "0.85rem", textDecoration: "none", display: "inline-block" }}>
-            Go to Dashboard
-          </Link>
-        </div>
-      ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          {myPosts.map((post) => <PostCard key={post.id} post={post} S={S} />)}
-        </div>
+      {/* Delete Account Modal */}
+      {showDeleteModal && (
+        <DeleteAccountModal
+          onConfirm={handleDeleteAccount}
+          onClose={() => { if (!deleting) { setShowDeleteModal(false); setDeleteError(""); } }}
+          deleting={deleting}
+          deleteError={deleteError}
+        />
       )}
-    </div>
+    </main>
   );
 }

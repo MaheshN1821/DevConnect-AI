@@ -634,6 +634,7 @@ const goToPost = useCallback((post) => {
 
               {user ? (
                 <>
+                  <Link href="/developers" style={S.navLink}>Developers</Link>
                   <Notifications />
                   <Link href="/dashboard" style={S.btnNavCta}>Open Community App</Link>
                   <Link
@@ -707,6 +708,9 @@ const goToPost = useCallback((post) => {
 
               {user ? (
                 <>
+                  <Link href="/developers" style={{ ...S.mobileNavLink, textDecoration: "none" }} onClick={() => setMobileOpen(false)}>
+                    <span>👥</span> Developers
+                  </Link>
                   <Link href="/profile" style={{ ...S.mobileNavLink, textDecoration: "none" }} onClick={() => setMobileOpen(false)}>
                     <span>👤</span> {user.displayName?.split(" ")[0] || "Profile"}
                   </Link>
@@ -820,6 +824,10 @@ const goToPost = useCallback((post) => {
         {!isMobile && (
           <button style={S.btnIcon} title="AI Code Review Alerts">✨</button>
         )}
+
+        <Link href="/developers" style={S.btnIcon} title="Discover Developers">
+          👥
+        </Link>
 
         {/* Notifications bell — shows a blue dot when there are unread items */}
         <Notifications isMobile={isMobile} />
