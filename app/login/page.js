@@ -5,7 +5,7 @@ import { useAuth } from "../../context/AuthContext";
 import { useRouter } from "next/navigation";
 import { useTheme } from "../../context/ThemeContext";
 import Link from "next/link";
-import { Sparkles, Mail, KeyRound, Sun, Moon, Eye, EyeOff } from "lucide-react";
+import { Sparkles, Mail, KeyRound, Sun, Moon, Eye, EyeOff, ArrowLeft } from "lucide-react";
 
 export default function Login() {
   const { loginWithGoogle, loginWithGithub, loginWithEmail, user } = useAuth();
@@ -334,6 +334,22 @@ export default function Login() {
       <div style={{ ...glowStyle, bottom: "-10%", right: "-10%", width: "40%", height: "40%", background: "radial-gradient(circle, rgba(124, 58, 237, 0.2), transparent 80%)" }} />
 
       <div style={cardStyle}>
+        {/* Back to home */}
+        <div style={{ position: "absolute", top: "1rem", left: "1rem", zIndex: 20 }}>
+          <Link
+            href="/"
+            style={{
+              ...themeButtonStyle,
+              textDecoration: "none",
+            }}
+            aria-label="Back to home"
+            onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-primary)"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = "var(--bg-tertiary)"; }}
+          >
+            <ArrowLeft size={16} />
+          </Link>
+        </div>
+
         {/* Theme toggle */}
         <div style={themeToggleContainerStyle}>
           <button

@@ -5,7 +5,7 @@ import { useAuth } from "../../context/AuthContext";
 import { useRouter } from "next/navigation";
 import { useTheme } from "../../context/ThemeContext";
 import Link from "next/link";
-import { Sparkles, Mail, KeyRound, User, Sun, Moon, Eye, EyeOff } from "lucide-react";
+import { Sparkles, Mail, KeyRound, User, Sun, Moon, Eye, EyeOff, ArrowLeft } from "lucide-react";
 
 // Inline styles can't use @media queries, so layout-critical values
 // branch on this instead.
@@ -384,6 +384,26 @@ export default function Signup() {
       />
 
       <div style={cardStyle}>
+        {/* Back to home */}
+        <div style={{ position: "absolute", top: isMobile ? "0.85rem" : "1.25rem", left: isMobile ? "0.85rem" : "1.25rem", zIndex: 20 }}>
+          <Link
+            href="/"
+            style={{
+              ...themeButtonStyle,
+              textDecoration: "none",
+            }}
+            aria-label="Back to home"
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = "var(--bg-primary)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = "var(--bg-tertiary)";
+            }}
+          >
+            <ArrowLeft size={18} />
+          </Link>
+        </div>
+
         {/* Theme Toggle */}
         <div style={themeToggleContainerStyle}>
           <button
